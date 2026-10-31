@@ -18,9 +18,19 @@ import * as A from '../world/actions';
 import { useDayPhase } from '../world/env/useDayPhase';
 import { audioStore } from '../world/settings';
 import { WorldCanvas } from '../world/WorldCanvas';
+import { useNet } from '../net/netStore';
+import { sync } from '../net/sync';
+import { Greetings } from '../ui/Greetings';
 import { resetWorld, useWorld, worldStore } from '../world/worldStore';
 
 type Panel = 'sound' | 'display' | 'help' | null;
+
+const STATUS_TEXT = {
+  disabled: '單人模式',
+  connecting: '連線中…',
+  offline: '暫時無法取得在線狀態',
+  full: '房間已滿，稍後自動重試',
+} as const;
 
 export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'> }) {
   const profile = loadProfile(scene);
@@ -33,6 +43,8 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
   const narrow = useMedia('(max-width: 640px)');
   const [panel, setPanel] = useState<Panel>(() => (load('ui', { helpSeen: false }).helpSeen ? null : 'help'));
   const [cardOpen, setCardOpen] = useState(!narrow);
+  const [greet, setGreet] = useState(false);
+  const net = useNet((s) => s);
 
   useKeyboard();
   useAudioDirector(phase);
@@ -48,6 +60,15 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
   useEffect(() => {
     if (!profile) navigate(`/create/${scene}`);
   }, [profile, scene]);
+
+  // 多人同步：進入場景時加入房間，離開時通知伺服器
+  const nick = profile?.nickname;
+  useEffect(() => {
+    const p = loadProfile(scene);
+    if (!p) return;
+    sync.start(scene, p);
+    return () => sync.stop();
+  }, [scene, nick]);
 
   // 自動慢敲：每秒一次；離開木魚或起身即停止
   useEffect(() => {
@@ -81,12 +102,12 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
         {/* 上方列 */}
         <div className="flex items-start justify-between gap-2">
           <div className="glass pointer-events-auto px-3 py-2">
-            <p className="text-sm font-bold text-forest">
+            <p className="text-sm font-bold text-forest" aria-live="polite">
               {cfg.name}
-              <span className="font-medium text-stone-500">｜單人模式</span>
+              <span className="font-medium text-stone-500">｜{net.status === 'online' ? `在線 ${net.online} 人` : STATUS_TEXT[net.status]}</span>
             </p>
-            <p className="hidden text-[11px] text-stone-500 sm:block" title="多人同步（Google Sheets + Apps Script）將於 Phase 2 開放；在線人數只會依真實玩家狀態計算。">
-              山林大廳・{PHASE_LABEL[phase]}・多人同步尚未開放
+            <p className="hidden text-[11px] text-stone-500 sm:block" title="在線人數依伺服器上有效的玩家心跳計算；同步約每 5～10 秒一次，其他人的位置會有幾秒延遲。">
+              {net.status === 'online' ? net.roomName : net.status === 'disabled' ? '未設定多人同步伺服器' : '單人功能仍可正常使用'}・{PHASE_LABEL[phase]}
             </p>
           </div>
           <div className="pointer-events-auto flex flex-wrap justify-end gap-1.5">
@@ -133,9 +154,17 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
         <div className="flex items-end justify-between gap-2">
           <div className="hidden w-32 sm:block">{touch && <Joystick />}</div>
           <div className="flex flex-1 flex-col items-center gap-2">
-            <InteractionPanel scene={scene} />
+            {greet ? <Greetings onClose={() => setGreet(false)} /> : <InteractionPanel scene={scene} />}
             <MeditationTimer />
-            <ActionBar scene={scene} compact={narrow} />
+            <div className="flex items-end gap-1.5">
+              <ActionBar scene={scene} compact={narrow} />
+              {net.status === 'online' && (
+                <button type="button" className={`glass pointer-events-auto flex flex-col items-center px-2.5 py-1.5 text-[11px] font-medium ${greet ? 'text-forest' : 'text-stone-600'}`} onClick={() => setGreet(!greet)} aria-label="打招呼">
+                  <span className="text-lg leading-none">💬</span>
+                  {!narrow && <span className="mt-0.5">打招呼</span>}
+                </button>
+              )}
+            </div>
           </div>
           <div className="hidden w-64 sm:block">
             <DailyCard scene={scene} open={cardOpen} setOpen={setCardOpen} />

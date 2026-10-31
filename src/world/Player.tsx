@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { AvatarConfig } from '../data/avatar';
 import { audio } from '../audio/engine';
 import { Chibi, type PoseInput } from './character/Chibi';
+import { Bubble } from './RemotePlayers';
 import { heightAt, resolveCollisions } from './physics';
 import type { SceneLayout } from './types';
 import { input, player, standUp, worldStore } from './worldStore';
@@ -181,8 +182,9 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
     <group ref={group}>
       <Chibi avatar={avatar} pose={pose} />
       <Html position={[0, 1.62, 0]} center zIndexRange={[20, 0]} pointerEvents="none">
-        <div className="nameplate rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-bold text-forest shadow">
-          {nickname}
+        <div className="nameplate flex flex-col items-center">
+          <Bubble playerId="self" />
+          <div className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-bold text-forest shadow">{nickname}</div>
         </div>
       </Html>
     </group>

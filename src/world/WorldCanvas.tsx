@@ -10,6 +10,7 @@ import { PhaseCtx, useDayPhase } from './env/useDayPhase';
 import { ChurchScene } from './scenes/Church';
 import { TempleScene } from './scenes/Temple';
 import { MoveMarker, Player } from './Player';
+import { RemotePlayers } from './RemotePlayers';
 import { useSettings } from './settings';
 import { worldStore } from './worldStore';
 
@@ -49,6 +50,7 @@ export function WorldCanvas({ scene, avatar, nickname }: { scene: Exclude<SceneI
         </group>
         <MoveMarker layout={layout} />
         <Player layout={layout} avatar={avatar} nickname={nickname} />
+        <RemotePlayers />
         <OrbitControls
           makeDefault
           enablePan={false}

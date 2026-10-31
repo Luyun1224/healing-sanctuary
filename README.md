@@ -15,11 +15,11 @@
 | 階段 | 內容 | 狀態 |
 | --- | --- | --- |
 | Phase 1 | 山谷入口、佛堂、教堂、Q 版角色建立、移動與碰撞、10 種動作、木魚、蒲團靜坐、平安燈、長椅禱告、祝福蠟燭、自然音效、晝夜、Pages 部署設定 | ✅ 已實作，測試紀錄見 [docs/TEST-PHASE1.md](docs/TEST-PHASE1.md) |
-| Phase 2 | Google Sheets + GAS 多人同步 | ⏳ 未開始（設計方向見 [docs/ROADMAP.md](docs/ROADMAP.md)） |
+| Phase 2 | Google Sheets + GAS 多人同步：Sheets 初始化、GAS API、房間、在線人數、遠端角色插值、動作同步、預設互動泡泡、專注靜心模式、離線清除、負載測試工具 | ✅ 已實作；**本機模擬器**測試通過，正式 GAS 待部署實測（[docs/TEST-PHASE2.md](docs/TEST-PHASE2.md)、[部署說明](docs/GAS-SETUP.md)） |
 | Phase 3 | 值日陪伴員、每日一句、公告、集體靜心邀請 | ⏳ 未開始 |
 | Phase 4 | 煩惱寄放所、呼吸練習、心情、抽卡、小動物 | ⏳ 未開始 |
 
-目前為**單人模式**：畫面左上角顯示「單人模式」，不顯示任何在線人數（不使用模擬數字）。
+未設定 GAS 網址時為**單人模式**（左上角顯示「單人模式」）；設定後顯示「在線 N 人」，人數只依伺服器上有效的玩家心跳計算，不使用模擬數字。
 
 ## 本機執行
 
@@ -40,6 +40,18 @@ npm run preview    # http://localhost:4173/healing-sanctuary/
 
 `vite.config.ts` 的 `base` 固定為 `/healing-sanctuary/`；所有 3D 物件、貼圖與音效都在程式中即時產生，沒有外部模型或音檔需要載入。若 repository 改名，請同步修改 `base`。
 
+## 多人同步（Phase 2）
+
+- 架構：本機即時移動＋Apps Script 輪詢（5～10 秒，人數多時自動拉長）＋遠端位置插值。設計細節見 [`gas/Code.gs`](gas/Code.gs) 開頭說明。
+- 部署：[docs/GAS-SETUP.md](docs/GAS-SETUP.md)（試算表初始化、網頁應用程式部署、`GAS_URL` 變數、安全邊界）。
+- 本機開發測試：
+  ```bash
+  node tools/gas-emulator.mjs --latency 300            # 以模擬器執行 gas/Code.gs
+  VITE_GAS_URL=http://localhost:8787/exec npm run dev  # 開兩個瀏覽器視窗即可互相看見
+  node tools/e2e-multiplayer.cjs                       # 兩個瀏覽器的自動驗收測試
+  node tools/load-test.mjs --clients 25 --duration 120 # 負載測試（加 --url 可測正式環境）
+  ```
+
 ## 操作說明
 
 | | 桌機 | 手機／平板 |
@@ -48,6 +60,7 @@ npm run preview    # http://localhost:4173/healing-sanctuary/
 | 鏡頭 | 滑鼠拖曳旋轉、滾輪縮放、Q／E 旋轉 | 單指拖曳旋轉、雙指縮放 |
 | 互動 | 走近物件，下方出現互動面板 | 同左 |
 | 動作 | 下方動作列：揮手、開心、鞠躬、合掌／禱告、坐下、靜坐／默禱 | 同左（只顯示圖示） |
+| 互動 | 多人連線時按「💬 打招呼」：揮手、合掌、微笑、愛心、「辛苦了！」等預設短語（不開放自由聊天，8 秒冷卻）；可開啟「專注靜心模式」隱藏他人泡泡 | 同左 |
 
 **佛堂**：木魚（手動、每秒一次自動慢敲、停止、木魚音量；次數只存在本機）、佛像前合掌／鞠躬、蒲團靜坐（1／3／5／10 分鐘，可暫停、提前結束）、平安燈（逐盞由暗漸亮＋祝福語）、寺院鐘、木造涼亭、溪邊長椅、瀑布觀景、竹林。
 **教堂**：8 張長椅（坐下、雙手交握禱告、閉眼默禱）、祭壇前禱告、祝福蠟燭、鋼琴角落（柔和鋼琴／管風琴和聲）、今日祝福看板、鐘樓、花園涼亭、噴水池、花園長椅。
@@ -75,4 +88,4 @@ src/
 
 ## 隱私
 
-不需真實姓名或員工編號；角色、暱稱、設定、木魚次數只存在使用者瀏覽器（localStorage）。目前版本不傳送任何資料到伺服器。完整說明見首頁「隱私說明」。素材來源見 [docs/ASSETS.md](docs/ASSETS.md)。
+不需真實姓名或員工編號；角色、設定、木魚次數只存在使用者瀏覽器（localStorage）。啟用多人同步時只傳送暱稱、外觀、位置與動作，暫存於 Apps Script 快取並在離線後清除，不寫入試算表。完整說明見首頁「隱私說明」。素材來源見 [docs/ASSETS.md](docs/ASSETS.md)。
