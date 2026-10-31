@@ -85,13 +85,13 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
               {cfg.name}
               <span className="font-medium text-stone-500">｜單人模式</span>
             </p>
-            <p className="text-[11px] text-stone-500" title="多人同步（Google Sheets + Apps Script）將於 Phase 2 開放；在線人數只會依真實玩家狀態計算。">
+            <p className="hidden text-[11px] text-stone-500 sm:block" title="多人同步（Google Sheets + Apps Script）將於 Phase 2 開放；在線人數只會依真實玩家狀態計算。">
               山林大廳・{PHASE_LABEL[phase]}・多人同步尚未開放
             </p>
           </div>
           <div className="pointer-events-auto flex flex-wrap justify-end gap-1.5">
             <button type="button" className={`btn ${sound ? 'bg-forest text-white' : 'bg-white/85 text-stone-700'}`} onClick={toggleSound} aria-pressed={sound}>
-              {sound ? '🔊 聲音開' : '🔇 開啟聲音'}
+              {sound ? '🔊' : '🔇'}{!narrow && (sound ? ' 聲音開' : ' 開啟聲音')}
             </button>
             <button type="button" className="btn-soft" onClick={() => setPanel(panel === 'sound' ? null : 'sound')} aria-label="音效設定">
               🎚️{!narrow && ' 音效'}

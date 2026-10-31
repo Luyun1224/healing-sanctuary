@@ -134,3 +134,8 @@ export function strikeFish() {
   save('counts', { fish: fishCount });
   worldStore.set({ fishCount, lastStrike: performance.now(), baseAnim: 'fishDrum', gesture: null, eyesClosed: false });
 }
+
+// 開發模式下提供自動化測試用的除錯介面（正式建置不包含）
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__hs = { worldStore, player, input };
+}

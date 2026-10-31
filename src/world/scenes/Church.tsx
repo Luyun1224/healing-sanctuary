@@ -68,7 +68,7 @@ function Nave() {
       {[-1, 1].map((s) => (
         <group key={s}>
           <Box size={[0.3, h, depth]} position={[s * N.x1, midY, cz]} color={STONE} />
-          <Box size={[seg, h, 0.3]} position={[s * (N.door + seg / 2), midY, N.z1]} color={STONE} />
+          <Box size={[seg, 0.7, 0.3]} position={[s * (N.door + seg / 2), FY + 0.35, N.z1]} color={STONE} />
           {/* 扶壁 */}
           {[-5.5, -9, -12.5].map((z) => (
             <Box key={z} size={[0.4, h * 0.75, 0.5]} position={[s * (N.x1 + 0.3), FY + (h * 0.75) / 2, z + 1.75]} color={STONE_SHADE} />
@@ -87,18 +87,22 @@ function Nave() {
           ))}
         </group>
       ))}
-      <Box size={[N.door * 2, 0.9, 0.3]} position={[0, FY + h - 0.45, N.z1]} color={STONE} />
+      {/* 正面牆（室內時淡出，只保留矮牆） */}
+      <FadeGroup>
+        {[-1, 1].map((s) => (
+          <Box key={s} size={[seg, h - 0.7, 0.3]} position={[s * (N.door + seg / 2), FY + 0.7 + (h - 0.7) / 2, N.z1]} color={STONE} />
+        ))}
+        <Box size={[N.door * 2, 0.9, 0.3]} position={[0, FY + h - 0.45, N.z1]} color={STONE} />
+        <GableRoof width={width + 0.3} depth={0.3} height={2.4} position={[0, FY + h, N.z1]} color={STONE} />
+        <mesh position={[0, FY + h + 1.05, N.z1 + 0.17]}>
+          <circleGeometry args={[0.75, 24]} />
+          <meshStandardMaterial map={rose} emissive="#ffffff" emissiveMap={rose} emissiveIntensity={0.4} />
+        </mesh>
+      </FadeGroup>
       {/* 木門（敞開） */}
       {[-1, 1].map((s) => (
         <Box key={s} size={[N.door, 2.6, 0.08]} position={[s * (N.door + 0.05), FY + 1.3, N.z1 + N.door / 2 + 0.1]} rotation={[0, s * (Math.PI / 2), 0]} color="#9a6a42" />
       ))}
-      {/* 正面玫瑰窗 */}
-      <mesh position={[0, FY + h + 1.05, N.z1 + 0.17]}>
-        <circleGeometry args={[0.75, 24]} />
-        <meshStandardMaterial map={rose} emissive="#ffffff" emissiveMap={rose} emissiveIntensity={0.4} />
-      </mesh>
-      {/* 正面山牆 */}
-      <GableRoof width={width + 0.3} depth={0.3} height={2.4} position={[0, FY + h, N.z1]} color={STONE} />
       {/* 屋頂（室內淡出） */}
       <FadeGroup>
         <group position={[0, FY + h, cz]} rotation={[0, Math.PI / 2, 0]}>

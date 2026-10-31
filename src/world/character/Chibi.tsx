@@ -27,6 +27,7 @@ const HIP_Y = 0.36;
 const G = {
   head: new THREE.SphereGeometry(0.27, 28, 20),
   hairCap: new THREE.SphereGeometry(0.285, 28, 16, 0, Math.PI * 2, 0, 1.75),
+  monkCap: new THREE.SphereGeometry(0.274, 28, 12, 0, Math.PI * 2, 0, 1.05),
   ear: new THREE.SphereGeometry(0.055, 10, 8),
   eye: new THREE.SphereGeometry(0.034, 12, 10),
   eyeHi: new THREE.SphereGeometry(0.011, 6, 6),
@@ -296,12 +297,13 @@ export function Chibi({
             <>
               <M g={G.robe} m={primary} />
               {/* 交領 */}
-              <M g={G.vneck} m={white} position={[0, 0.34, 0.165]} rotation={[-0.25, 0, Math.PI]} scale={[0.8, 1, 1]} />
+              <M g={G.lapel} m={white} position={[0.04, 0.33, 0.15]} rotation={[-0.35, 0, 0.6]} scale={[0.8, 0.55, 1]} />
+              <M g={G.lapel} m={secondary} position={[-0.04, 0.32, 0.155]} rotation={[-0.35, 0, -0.6]} scale={[0.8, 0.55, 1]} />
               {avatar.monkStyle === 'sash' && <M g={G.sash} m={secondary} position={[0.02, 0.1, 0.02]} rotation={[0, 0, 0.55]} scale={[1, 1, 7.6]} />}
               {avatar.monkStyle === 'beads' &&
                 Array.from({ length: 16 }, (_, i) => {
                   const a = (i / 16) * Math.PI * 2;
-                  return <M key={i} g={G.bead} m={bead} position={[Math.sin(a) * 0.15, 0.37 - (Math.cos(a) * 0.5 + 0.5) * 0.12, Math.cos(a) * 0.12 + 0.03]} />;
+                  return <M key={i} g={G.bead} m={bead} position={[Math.sin(a) * 0.15, 0.4 - (Math.cos(a) * 0.5 + 0.5) * 0.16, Math.cos(a) * 0.14 + 0.035 + (Math.cos(a) > 0 ? 0.03 : 0)]} />;
                 })}
             </>
           ) : (
@@ -359,7 +361,7 @@ export function Chibi({
             <M g={G.ear} m={skin} position={[-0.265, 0.22, 0]} />
             {/* 髮型 */}
             {monk ? (
-              <mesh geometry={G.hairCap} material={hairMat} position={[0, 0.255, -0.01]} rotation={[-0.45, 0, 0]} scale={[0.97, 0.97, 0.97]} />
+              <mesh geometry={G.monkCap} material={hairMat} position={[0, 0.25, -0.01]} rotation={[-0.55, 0, 0]} />
             ) : (
               <Hair kind={avatar.hair} mat={hairMat} />
             )}

@@ -32,6 +32,7 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
   const pose = useRef<PoseInput>({ anim: 'idle', eyesClosed: false, strikeAt: 0, speed: 0, seated: null });
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
+  const portrait = useThree((s) => s.size.width < s.size.height);
   const lastCheck = useRef(0);
   const prevTarget = useMemo(() => new THREE.Vector3(), []);
 
@@ -40,13 +41,14 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
     player.pos.set(x, heightAt(layout.floors, x, z), z);
     player.rot = rot;
     player.face = null;
-    camera.position.set(x - Math.sin(rot) * 9, 6.2, z - Math.cos(rot) * 9);
+    const dist = portrait ? 13 : 9;
+    camera.position.set(x - Math.sin(rot) * dist, portrait ? 8.5 : 6.2, z - Math.cos(rot) * dist);
     prevTarget.set(x, CAM_HEIGHT, z);
     if (controls) {
       controls.target.copy(prevTarget);
       controls.update();
     }
-  }, [layout, camera, controls, prevTarget]);
+  }, [layout, camera, controls, prevTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);

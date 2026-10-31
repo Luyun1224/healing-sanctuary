@@ -117,7 +117,7 @@ export default function CreatePage({ scene }: { scene: Exclude<SceneId, 'taoist'
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-gradient-to-b from-[#e7efe2] to-cream md:flex-row md:overflow-hidden">
       <div className="relative h-[42vh] shrink-0 md:h-full md:flex-1">
-        <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 1.3, 3.4], fov: 38 }}>
+        <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 1.4, 4.2], fov: 36 }}>
           <color attach="background" args={['#e5eedf']} />
           <hemisphereLight args={['#ffffff', '#9cbf83', 1]} />
           <directionalLight position={[3, 5, 4]} intensity={1.8} castShadow shadow-mapSize={[1024, 1024]} />
@@ -134,7 +134,7 @@ export default function CreatePage({ scene }: { scene: Exclude<SceneId, 'taoist'
               <meshStandardMaterial color="#c9a27a" />
             </mesh>
           </group>
-          <OrbitControls target={[0, 0.65, 0]} enablePan={false} minDistance={2} maxDistance={6} autoRotate autoRotateSpeed={1.2} maxPolarAngle={1.55} />
+          <OrbitControls target={[0, 0.7, 0]} enablePan={false} minDistance={2} maxDistance={6} autoRotate autoRotateSpeed={1.2} maxPolarAngle={1.55} />
         </Canvas>
         <button type="button" className="btn-soft absolute left-3 top-3 shadow" onClick={() => navigate('/')}>
           ← 返回山谷

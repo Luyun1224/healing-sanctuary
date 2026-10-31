@@ -3,8 +3,8 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { worldStore } from '../worldStore';
 
-/** 玩家進入室內時淡出屋頂，方便從上方視角看見室內 */
-export function FadeGroup({ children }: { children: ReactNode }) {
+/** 玩家進入室內（或坐在涼亭）時淡出屋頂，方便從上方視角看見角色 */
+export function FadeGroup({ children, hide = () => worldStore.get().inside }: { children: ReactNode; hide?: () => boolean }) {
   const ref = useRef<THREE.Group>(null);
   const mats = useRef<THREE.Material[]>([]);
   const op = useRef(1);
@@ -20,7 +20,7 @@ export function FadeGroup({ children }: { children: ReactNode }) {
     mats.current = list;
   });
   useFrame((_, dt) => {
-    const target = worldStore.get().inside ? 0 : 1;
+    const target = hide() ? 0 : 1;
     op.current += (target - op.current) * (1 - Math.exp(-dt * 6));
     const g = ref.current;
     if (!g) return;

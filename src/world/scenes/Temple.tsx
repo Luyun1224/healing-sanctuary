@@ -74,28 +74,32 @@ function Hall() {
       <Box size={[width + 0.3, wallH, 0.3]} position={[0, midY, H.z0]} color={WALL} />
       <Box size={[0.3, wallH, depth]} position={[H.x0, midY, (H.z0 + H.z1) / 2]} color={WALL} />
       <Box size={[0.3, wallH, depth]} position={[H.x1, midY, (H.z0 + H.z1) / 2]} color={WALL} />
-      {/* 正面木格門 */}
+      {/* 正面：底部矮牆保留，上方木格門與匾額在室內時淡出 */}
       {[-1, 1].map((s) => (
-        <group key={s}>
-          <mesh position={[s * (H.door + frontSeg / 2), FY + 1.75, H.z1]} castShadow receiveShadow>
-            <boxGeometry args={[frontSeg, 2.3, 0.2]} />
-            <meshStandardMaterial map={lattice} roughness={0.9} />
-          </mesh>
-          <Box size={[frontSeg, 0.6, 0.24]} position={[s * (H.door + frontSeg / 2), FY + 0.3, H.z1]} color={WOOD} />
-          <Box size={[frontSeg, 0.25, 0.24]} position={[s * (H.door + frontSeg / 2), FY + wallH - 0.125, H.z1]} color={WOOD} />
-        </group>
+        <Box key={s} size={[frontSeg, 0.6, 0.24]} position={[s * (H.door + frontSeg / 2), FY + 0.3, H.z1]} color={WOOD} />
       ))}
-      <Box size={[H.door * 2, 0.7, 0.24]} position={[0, FY + wallH - 0.35, H.z1]} color={WOOD} />
-      {/* 匾額 */}
-      <mesh position={[0, FY + wallH + 0.15, H.z1 + 0.6]} rotation={[-0.08, 0, 0]}>
-        <boxGeometry args={[2.4, 0.84, 0.08]} />
-        <meshStandardMaterial attach="material-0" color="#5a2f1f" />
-        <meshStandardMaterial attach="material-1" color="#5a2f1f" />
-        <meshStandardMaterial attach="material-2" color="#5a2f1f" />
-        <meshStandardMaterial attach="material-3" color="#5a2f1f" />
-        <meshStandardMaterial attach="material-4" map={plaque} emissive="#3a2010" emissiveIntensity={0.2} />
-        <meshStandardMaterial attach="material-5" color="#5a2f1f" />
-      </mesh>
+      <FadeGroup>
+        {[-1, 1].map((s) => (
+          <group key={s}>
+            <mesh position={[s * (H.door + frontSeg / 2), FY + 1.75, H.z1]} castShadow receiveShadow>
+              <boxGeometry args={[frontSeg, 2.3, 0.2]} />
+              <meshStandardMaterial map={lattice} roughness={0.9} />
+            </mesh>
+            <Box size={[frontSeg, 0.25, 0.24]} position={[s * (H.door + frontSeg / 2), FY + wallH - 0.125, H.z1]} color={WOOD} />
+          </group>
+        ))}
+        <Box size={[H.door * 2, 0.7, 0.24]} position={[0, FY + wallH - 0.35, H.z1]} color={WOOD} />
+        <mesh position={[0, FY + wallH + 0.15, H.z1 + 0.6]} rotation={[-0.08, 0, 0]}>
+          <boxGeometry args={[2.4, 0.84, 0.08]} />
+          <meshStandardMaterial attach="material-0" color="#5a2f1f" />
+          <meshStandardMaterial attach="material-1" color="#5a2f1f" />
+          <meshStandardMaterial attach="material-2" color="#5a2f1f" />
+          <meshStandardMaterial attach="material-3" color="#5a2f1f" />
+          <meshStandardMaterial attach="material-4" map={plaque} emissive="#3a2010" emissiveIntensity={0.2} />
+          <meshStandardMaterial attach="material-5" color="#5a2f1f" />
+        </mesh>
+        <Box size={[14, 0.3, 0.3]} position={[0, FY + wallH - 0.05, -1.95]} color={WOOD_DARK} />
+      </FadeGroup>
       {/* 柱子：牆角與前廊 */}
       {[
         [H.x0, H.z0],
@@ -113,7 +117,6 @@ function Hall() {
           <Cyl args={[0.28, 0.3, 0.16, 10]} position={[x, FY + 0.08, -1.95]} color="#cfc6b4" />
         </group>
       ))}
-      <Box size={[14, 0.3, 0.3]} position={[0, FY + wallH - 0.05, -1.95]} color={WOOD_DARK} />
       <EaveLanterns />
       {/* 屋頂（進入室內時淡出） */}
       <FadeGroup>

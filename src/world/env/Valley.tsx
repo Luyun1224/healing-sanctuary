@@ -6,6 +6,8 @@ import { BRIDGE, PAVILION, STREAM, STREAM_BENCH, WATERFALL, mulberry32, type Tre
 import { Ball, Bench, Box, Cone, Cyl, Glow, getGlowTexture } from './prims';
 import { isDark, usePhase } from './useDayPhase';
 import { windMaterial, windUniforms } from './wind';
+import { FadeGroup } from './FadeGroup';
+import { worldStore } from '../worldStore';
 
 const tmpObj = new THREE.Object3D();
 
@@ -421,8 +423,10 @@ export function Pavilion({ variant, rot }: { variant: 'wood' | 'white'; rot: num
         const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
         return <Cyl key={i} args={[0.11, 0.13, 2.6, 8]} position={[Math.cos(a) * 1.9, 1.5, Math.sin(a) * 1.9]} color={post} />;
       })}
-      <Cone r={3.2} h={1.5} seg={6} position={[0, 3.45, 0]} color={roof} />
-      <Cone r={0.35} h={0.6} seg={6} position={[0, 4.4, 0]} color={variant === 'wood' ? '#c9a24a' : '#ffffff'} />
+      <FadeGroup hide={() => worldStore.get().seat?.id === 'pavilion'}>
+        <Cone r={3.2} h={1.5} seg={6} position={[0, 3.45, 0]} color={roof} />
+        <Cone r={0.35} h={0.6} seg={6} position={[0, 4.4, 0]} color={variant === 'wood' ? '#c9a24a' : '#ffffff'} />
+      </FadeGroup>
       {variant === 'wood' && (
         <>
           <Box size={[0.3, 0.42, 0.3]} position={[0, 0.41, 0]} color="#8a6446" />
