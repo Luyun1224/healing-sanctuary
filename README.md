@@ -15,7 +15,7 @@
 | 階段 | 內容 | 狀態 |
 | --- | --- | --- |
 | Phase 1 | 山谷入口、佛堂、教堂、Q 版角色建立、移動與碰撞、10 種動作、木魚、蒲團靜坐、平安燈、長椅禱告、祝福蠟燭、自然音效、晝夜、Pages 部署設定 | ✅ 已實作，測試紀錄見 [docs/TEST-PHASE1.md](docs/TEST-PHASE1.md) |
-| Phase 2 | Google Sheets + GAS 多人同步：Sheets 初始化、GAS API、房間、在線人數、遠端角色插值、動作同步、預設互動泡泡、專注靜心模式、離線清除、負載測試工具 | ✅ 已實作；**本機模擬器**測試通過，正式 GAS 待部署實測（[docs/TEST-PHASE2.md](docs/TEST-PHASE2.md)、[部署說明](docs/GAS-SETUP.md)） |
+| Phase 2 | Google Sheets + GAS 多人同步：Sheets 初始化、GAS API、房間、在線人數、遠端角色插值、動作同步、預設互動泡泡、專注靜心模式、離線清除、負載測試工具 | ✅ 已實作；模擬器與**正式 Google Apps Script** 皆已測試（25 人負載 97.1% 成功，失敗為自動重試的取鎖逾時）（[docs/TEST-PHASE2.md](docs/TEST-PHASE2.md)、[部署說明](docs/GAS-SETUP.md)） |
 | Phase 3 | 值日陪伴員、每日一句、公告、集體靜心邀請 | ⏳ 未開始 |
 | Phase 4 | 煩惱寄放所、呼吸練習、心情、抽卡、小動物 | ⏳ 未開始 |
 
