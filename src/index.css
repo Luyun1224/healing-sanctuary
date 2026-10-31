@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  @apply bg-cream font-sans text-stone-700 antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas {
+  touch-action: none;
+}
+
+@layer components {
+  .glass {
+    @apply rounded-2xl border border-white/60 bg-white/70 shadow-soft backdrop-blur-md;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 text-sm font-medium transition active:scale-95 disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn bg-forest text-white hover:bg-[#355c3f];
+  }
+  .btn-soft {
+    @apply btn bg-white/80 text-stone-700 hover:bg-white;
+  }
+  .chip {
+    @apply rounded-full border px-3 py-1 text-xs font-medium transition;
+  }
+}
+
+.nameplate {
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+@keyframes breath {
+  0%, 100% { transform: scale(0.65); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+.breath { animation: breath 8s ease-in-out infinite; }
