@@ -2,7 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # 目前 repository 只有開發分支；建立 main 後兩者皆可觸發部署
+    branches: [main, claude/magical-davinci-xqpchy]
   workflow_dispatch:
 
 permissions:
@@ -25,6 +26,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # 多人同步 API（Google Apps Script Web App 網址）：repo Settings → Secrets and variables → Actions → Variables → GAS_URL
+          VITE_GAS_URL: ${{ vars.GAS_URL }}
       # GitHub Pages 對未知路徑回傳 404.html；本站使用 Hash Router，直接複製首頁即可
       - run: cp dist/index.html dist/404.html
       - uses: actions/configure-pages@v5
