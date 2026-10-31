@@ -17,6 +17,7 @@ import { useMedia } from '../ui/useMedia';
 import * as A from '../world/actions';
 import { useDayPhase } from '../world/env/useDayPhase';
 import { audioStore } from '../world/settings';
+import { audio } from '../audio/engine';
 import { WorldCanvas } from '../world/WorldCanvas';
 import { useNet } from '../net/netStore';
 import { sync } from '../net/sync';
@@ -53,6 +54,8 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
     resetWorld(scene);
     return () => {
       worldStore.set({ track: null, fishAuto: false });
+      // 離開 3D 世界（回首頁或換場景）時回到戶外聲音，避免誦唱持續播放
+      audio.setZone('outdoor', scene, 0);
     };
   }, [scene]);
 

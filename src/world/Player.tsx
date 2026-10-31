@@ -169,6 +169,12 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
       const r = layout.interior;
       const inside = Math.abs(player.pos.x - r.x) < r.hw && Math.abs(player.pos.z - r.z) < r.hd;
       if (inside !== s.inside) worldStore.set({ inside });
+      // 聲音區域：室內只剩誦唱／詩歌；在門口 12 公尺內可隱約聽見室內聲音
+      const ex = Math.max(0, Math.abs(player.pos.x - r.x) - r.hw);
+      const ez = Math.max(0, Math.abs(player.pos.z - r.z) - r.hd);
+      const near = THREE.MathUtils.clamp(1 - Math.hypot(ex, ez) / 12, 0, 1);
+      const scene = s.scene === 'church' ? 'church' : 'temple';
+      audio.setZone(inside ? scene : 'outdoor', scene, inside ? 1 : near);
       let water = 0;
       for (const w of layout.waterSources) {
         const d = Math.hypot(w.x - player.pos.x, w.z - player.pos.z);

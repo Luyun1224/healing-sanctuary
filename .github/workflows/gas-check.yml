@@ -1,0 +1,49 @@
+name: Check GAS multiplayer API
+
+# 手動執行：Actions → Check GAS multiplayer API → Run workflow
+# 1) 檢查 Apps Script 網頁應用程式是否可連線、跨網域標頭是否正確
+# 2) 依輸入的人數與時間執行負載測試（會產生實際的 Apps Script 執行次數）
+on:
+  workflow_dispatch:
+    inputs:
+      clients:
+        description: '模擬人數（0 = 只做連線檢查）'
+        default: '0'
+      duration:
+        description: '負載測試秒數'
+        default: '120'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Resolve URL
+        id: url
+        run: |
+          url="${{ vars.GAS_URL }}"
+          [ -z "$url" ] && url=$(grep -oE "https://script\.google\.com/macros/s/[^']+/exec" src/config/site.ts | head -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Connectivity and CORS
+        env:
+          URL: ${{ steps.url.outputs.url }}
+        run: |
+          echo "== GET getRooms =="
+          curl -sSL -m 30 "$URL?action=getRooms"; echo
+          echo "== POST text/plain getSettings (browser-like, Origin set) =="
+          curl -sSL -m 30 -D /tmp/h -X POST -H 'Content-Type: text/plain;charset=utf-8' -H 'Origin: https://luyun1224.github.io' -d '{"action":"getSettings"}' "$URL"; echo
+          echo "== response headers (redirect chain) =="
+          grep -iE '^(HTTP|location|access-control-allow-origin|content-type)' /tmp/h | sed -E 's#(macros/s/|user_content_key=)[^/&]+#\1***#g'
+          echo "== write via GET must be rejected =="
+          curl -sSL -m 30 "$URL?action=joinRoom"; echo
+      - name: Load test
+        if: ${{ inputs.clients != '0' }}
+        env:
+          URL: ${{ steps.url.outputs.url }}
+        run: node tools/load-test.mjs --url "$URL" --clients ${{ inputs.clients }} --duration ${{ inputs.duration }}

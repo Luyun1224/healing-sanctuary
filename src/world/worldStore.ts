@@ -137,5 +137,8 @@ export function strikeFish() {
 
 // 開發模式下提供自動化測試用的除錯介面（正式建置不包含）
 if (import.meta.env.DEV && typeof window !== 'undefined') {
+  void import('../audio/engine').then(({ audio }) => {
+    (window as unknown as Record<string, unknown>).__hs = { worldStore, player, input, audio };
+  });
   (window as unknown as Record<string, unknown>).__hs = { worldStore, player, input };
 }

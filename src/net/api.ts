@@ -4,7 +4,10 @@
  * - Apps Script 回應會 302 轉址至 script.googleusercontent.com，fetch 預設跟隨轉址並可讀取 JSON。
  * - 不使用 no-cors（無法讀取回應），也不使用 JSONP。
  */
-export const GAS_URL: string = (import.meta.env.VITE_GAS_URL as string | undefined)?.trim() || '';
+import { DEFAULT_GAS_URL } from '../config/site';
+
+const envUrl = (import.meta.env.VITE_GAS_URL as string | undefined)?.trim();
+export const GAS_URL: string = envUrl === 'off' ? '' : envUrl || DEFAULT_GAS_URL;
 
 export interface ApiError {
   ok: false;

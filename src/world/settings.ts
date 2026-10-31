@@ -13,6 +13,10 @@ export interface Settings {
   music: number;
   sfx: number;
   fish: number;
+  /** 室內誦唱／詩歌音量 */
+  chant: number;
+  /** 進入佛堂、教堂時播放室內氛圍 */
+  interior: boolean;
   natureOnly: boolean;
   rain: boolean;
 }
@@ -29,6 +33,8 @@ const DEFAULTS: Settings = {
   music: 0.5,
   sfx: 0.8,
   fish: 0.8,
+  chant: 0.8,
+  interior: true,
   natureOnly: false,
   rain: false,
 };
