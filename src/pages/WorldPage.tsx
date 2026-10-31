@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SCENES, type SceneId } from '../config/scenes';
 import { loadProfile } from '../data/avatar';
 import { dailyMessage } from '../data/blessings';
@@ -22,6 +22,7 @@ import { WorldCanvas } from '../world/WorldCanvas';
 import { useNet } from '../net/netStore';
 import { sync } from '../net/sync';
 import { Greetings } from '../ui/Greetings';
+import { Breathing, HealingPanel, InviteCard, type HealingView } from '../ui/Healing';
 import { resetWorld, showToast, useWorld, worldStore } from '../world/worldStore';
 
 type Panel = 'sound' | 'display' | 'help' | null;
@@ -45,6 +46,10 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
   const [panel, setPanel] = useState<Panel>(() => (load('ui', { helpSeen: false }).helpSeen ? null : 'help'));
   const [cardOpen, setCardOpen] = useState(!narrow);
   const [greet, setGreet] = useState(false);
+  const [healing, setHealing] = useState<HealingView>(null);
+  const [breath, setBreath] = useState<{ minutes: number; startAt: number } | null>(null);
+  const closeBreath = useCallback(() => setBreath(null), []);
+  const walking = useWorld((s) => s.walking);
   const net = useNet((s) => s);
 
   useKeyboard();
@@ -170,10 +175,35 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
         <div className="flex items-end justify-between gap-2">
           <div className="hidden w-32 sm:block">{touch && <Joystick />}</div>
           <div className="flex flex-1 flex-col items-center gap-2">
-            {greet ? <Greetings onClose={() => setGreet(false)} /> : <InteractionPanel scene={scene} />}
+            <InviteCard onJoin={(minutes, startAt) => setBreath({ minutes, startAt })} />
+            {breath ? (
+              <Breathing minutes={breath.minutes} startAt={breath.startAt} onClose={closeBreath} />
+            ) : healing === 'breath' ? (
+              <Breathing minutes={3} startAt={Date.now()} onClose={() => setHealing(null)} />
+            ) : healing ? (
+              <HealingPanel view={healing} setView={setHealing} scene={scene} />
+            ) : greet ? (
+              <Greetings onClose={() => setGreet(false)} />
+            ) : (
+              <InteractionPanel scene={scene} />
+            )}
+            {walking && (
+              <button type="button" className="glass pointer-events-auto px-3 py-1.5 text-xs font-medium text-forest" onClick={() => A.stopWalk()}>
+                🚶 沿著小徑散步中・點此停止
+              </button>
+            )}
             <MeditationTimer />
             <div className="flex items-end gap-1.5">
               <ActionBar scene={scene} compact={narrow} />
+              <button
+                type="button"
+                className={`glass pointer-events-auto flex flex-col items-center px-2.5 py-1.5 text-[11px] font-medium ${healing ? 'text-forest' : 'text-stone-600'}`}
+                onClick={() => setHealing(healing ? null : 'menu')}
+                aria-label="療癒小角落"
+              >
+                <span className="text-lg leading-none">🌿</span>
+                {!narrow && <span className="mt-0.5">療癒</span>}
+              </button>
               {net.status === 'online' && (
                 <button type="button" className={`glass pointer-events-auto flex flex-col items-center px-2.5 py-1.5 text-[11px] font-medium ${greet ? 'text-forest' : 'text-stone-600'}`} onClick={() => setGreet(!greet)} aria-label="打招呼">
                   <span className="text-lg leading-none">💬</span>
@@ -198,6 +228,8 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
 }
 
 function DailyCard({ scene, open, setOpen }: { scene: 'temple' | 'church'; open: boolean; setOpen: (v: boolean) => void }) {
+  const daily = useNet((s) => s.daily);
+  const ann = useNet((s) => s.announcements);
   return (
     <div className="glass pointer-events-auto p-3">
       <button type="button" className="flex w-full items-center justify-between text-left text-xs font-bold text-forest" onClick={() => setOpen(!open)}>
@@ -205,8 +237,11 @@ function DailyCard({ scene, open, setOpen }: { scene: 'temple' | 'church'; open:
       </button>
       {open && (
         <div className="mt-1.5 space-y-2 text-sm">
-          <p className="leading-relaxed">{dailyMessage(scene)}</p>
-          <p className="border-t border-stone-200 pt-2 text-[11px] text-stone-500">主持人公告：目前沒有公告</p>
+          <p className="leading-relaxed">{daily ? daily.content : dailyMessage(scene)}</p>
+          {daily?.author && <p className="text-right text-[11px] text-stone-500">— {daily.author}</p>}
+          <div className="border-t border-stone-200 pt-2 text-[11px] text-stone-600">
+            {ann.length ? ann.map((a) => <p key={a.id}>📢 {a.content}</p>) : <p className="text-stone-500">主持人公告：目前沒有公告</p>}
+          </div>
         </div>
       )}
     </div>

@@ -1,5 +1,7 @@
 import { audio } from '../audio/engine';
 import { CANDLE_BLESSINGS, LAMP_BLESSINGS, MEDITATION_DONE, pickOne } from '../data/blessings';
+import { WORRY_DONE } from '../data/healing';
+import { WALK_PATH } from './layouts/valley';
 import { TEMPLE_LAMP_IDS } from './layouts/temple';
 import { CHURCH_CANDLE_IDS } from './layouts/church';
 import { heightAt } from './physics';
@@ -109,4 +111,71 @@ export function finishMeditation(completed: boolean) {
 
 export function stopAll() {
   standUp();
+}
+
+/* ------------------------- Phase 4：山林探索與療癒 ------------------------- */
+
+export function petCat() {
+  const s = worldStore.get();
+  faceTo(s.nearby);
+  if (performance.now() - s.catPetAt < 4500) return;
+  worldStore.set({ catPetAt: performance.now() });
+  playGesture('happy');
+  audio.playPurr();
+  showToast('貓咪舒服地發出呼嚕聲', '摸摸');
+}
+
+export function feedFish() {
+  const s = worldStore.get();
+  faceTo(s.nearby);
+  if (performance.now() - s.pondFeedAt < 3000) return;
+  worldStore.set({ pondFeedAt: performance.now() });
+  audio.playSplash();
+}
+
+export function hangWish(text: string) {
+  const s = worldStore.get();
+  faceTo(s.nearby);
+  playGesture(s.scene === 'temple' ? 'handsTogether' : 'pray');
+  worldStore.set({ wishes: [...s.wishes, text].slice(-12) });
+  audio.playChime();
+  showToast(`「${text}」`, '祝福已掛上祈願樹');
+}
+
+export function watchButterflies() {
+  worldStore.set({ butterflyAt: performance.now() });
+  playGesture('happy');
+}
+
+let leafId = 0;
+/** 煩惱寄放所：文字只用於動畫，不保存、不上傳 */
+export function releaseWorry(text: string) {
+  const t = text.trim().slice(0, 60);
+  if (!t) return;
+  const id = ++leafId;
+  worldStore.set({ leaves: [...worldStore.get().leaves, { id, text: t, at: performance.now() }] });
+  playGesture('wave');
+  window.setTimeout(() => {
+    worldStore.set({ leaves: worldStore.get().leaves.filter((l) => l.id !== id) });
+    showToast(WORRY_DONE);
+  }, 7500);
+}
+
+/** 沿著小徑散步：自動走向下一個路點；按方向鍵或搖桿即停止 */
+export function startWalk() {
+  standUp();
+  let best = 0;
+  let bd = Infinity;
+  WALK_PATH.forEach(([x, z], i) => {
+    const d = Math.hypot(x - player.pos.x, z - player.pos.z);
+    if (d < bd) {
+      bd = d;
+      best = i;
+    }
+  });
+  worldStore.set({ walking: true, walkIdx: best, moveTarget: WALK_PATH[best] });
+}
+
+export function stopWalk() {
+  worldStore.set({ walking: false, moveTarget: null });
 }

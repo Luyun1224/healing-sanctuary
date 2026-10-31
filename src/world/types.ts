@@ -24,7 +24,11 @@ export type InteractKind =
   | 'board'
   | 'piano'
   | 'churchBell'
-  | 'altar';
+  | 'altar'
+  | 'cat'
+  | 'pond'
+  | 'wishTree'
+  | 'flowers';
 
 /** 座位：角色坐下時的位置（x,z）、根節點高度、面向角度 */
 export interface Seat {

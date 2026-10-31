@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: 'Noto Sans TC', system-ui, sans-serif; margin: 0; background: #f6f2e8; color: #3f3a33; }
+      header { background: #3f6b4a; color: #fff; padding: 14px 20px; }
+      nav { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 20px; background: #e8efe4; }
+      nav button { border: 0; border-radius: 999px; padding: 6px 14px; background: #fff; cursor: pointer; }
+      nav button.on { background: #3f6b4a; color: #fff; }
+      main { padding: 16px 20px; max-width: 980px; }
+      table { border-collapse: collapse; width: 100%; background: #fff; font-size: 14px; }
+      th, td { border-bottom: 1px solid #eee; padding: 6px 8px; text-align: left; vertical-align: top; }
+      .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 14px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); }
+      input, select, textarea { font: inherit; padding: 6px; border: 1px solid #ccc; border-radius: 8px; }
+      textarea { width: 100%; min-height: 60px; }
+      .btn { border: 0; border-radius: 8px; padding: 6px 12px; background: #3f6b4a; color: #fff; cursor: pointer; }
+      .btn.soft { background: #e8e2d6; color: #3f3a33; }
+      .btn.warn { background: #b5543c; }
+      .tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #eee; }
+      .tag.pending { background: #fde8b0; } .tag.approved, .tag.active, .tag.published { background: #cfe6cf; } .tag.rejected, .tag.disabled, .tag.removed { background: #f2c8c0; }
+      #msg { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 8px 16px; border-radius: 10px; display: none; }
+      .key { font-family: monospace; background: #fffbe6; border: 1px dashed #c9a96e; padding: 10px; border-radius: 8px; word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <header><b>心靈充電所｜管理後台</b><span style="opacity:.8;margin-left:10px;font-size:13px">所有操作都會記錄在 AdminLog 工作表</span></header>
+    <nav id="tabs"></nav>
+    <main id="view">載入中…</main>
+    <div id="msg"></div>
+    <script>
+      const TABS = { apps: '主持人申請', hosts: '主持人名單', daily: '每日一句', ann: '公告', settings: '功能開關', rooms: '房間' };
+      const SCENE = { temple: '靜心佛堂', church: '平安教堂', all: '全部' };
+      let data = null, tab = 'apps';
+      const $ = (s) => document.querySelector(s);
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      const tag = (s) => `<span class="tag ${esc(s)}">${esc(s)}</span>`;
+      function toast(t) { const m = $('#msg'); m.textContent = t; m.style.display = 'block'; setTimeout(() => (m.style.display = 'none'), 3500); }
+      function call(fn, ...args) {
+        return new Promise((ok, fail) => google.script.run.withSuccessHandler(ok).withFailureHandler((e) => { toast(e.message || String(e)); fail(e); })[fn](...args));
+      }
+      async function reload() { data = await call('getDashboard'); render(); }
+      function nav() { $('#tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === tab ? 'on' : ''}" onclick="tab='${k}';render()">${v}</button>`).join(''); }
+      function today() { return new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); }
+      function render() {
+        nav();
+        const v = $('#view');
+        if (tab === 'apps') {
+          v.innerHTML = `<div class="card"><p>一般同事請核准為「值日陪伴員」。「虛擬住持／神父／牧師」等正式職稱，只提供給符合身分或經適當授權者。</p>
+          <table><tr><th>申請</th><th>暱稱</th><th>場景</th><th>希望日期</th><th>自我介紹</th><th>狀態</th><th>操作</th></tr>
+          ${data.applications.map((a) => `<tr><td>${esc(a.ApplicationID)}<br><small>${esc(a.CreatedAt)}</small></td><td>${esc(a.Nickname)}</td><td>${SCENE[a.Scene] || esc(a.Scene)}</td><td>${esc(a.RequestedDate)}</td><td>${esc(a.Introduction)}</td><td>${tag(a.Status)}</td>
+          <td>${a.Status === 'pending' ? `<select id="r-${esc(a.ApplicationID)}"><option>值日陪伴員</option><option>${a.Scene === 'temple' ? '虛擬住持' : '神父'}</option>${a.Scene === 'church' ? '<option>牧師</option>' : ''}</select>
+            <input id="i-${esc(a.ApplicationID)}" placeholder="已驗證身分（例如 Email／單位）" style="width:150px"><br>
+            <label><input type="checkbox" id="f-${esc(a.ApplicationID)}"> 已確認具正式身分或授權</label><br>
+            <button class="btn" onclick="approve('${esc(a.ApplicationID)}')">核准</button> <button class="btn soft" onclick="reject('${esc(a.ApplicationID)}')">不通過</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7">目前沒有申請</td></tr>'}</table></div><div id="keybox"></div>`;
+        } else if (tab === 'hosts') {
+          v.innerHTML = `<div class="card"><table><tr><th>HostID</th><th>已驗證身分</th><th>場景</th><th>角色</th><th>狀態</th><th>核准時間</th><th></th></tr>
+          ${data.hosts.map((h) => `<tr><td><small>${esc(h.HostID)}</small></td><td>${esc(h.VerifiedIdentity)}</td><td>${SCENE[h.Scene] || esc(h.Scene)}</td><td>${esc(h.Role)}</td><td>${tag(h.Status)}</td><td>${esc(h.ApprovedAt)}</td>
+          <td>${h.Status === 'active' ? `<button class="btn warn" onclick="disableHost('${esc(h.HostID)}')">停用</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7">尚無主持人</td></tr>'}</table></div>`;
+        } else if (tab === 'daily') {
+          v.innerHTML = `<div class="card"><b>發布每日一句</b><p><select id="d-scene"><option value="all">全部場景</option><option value="temple">靜心佛堂</option><option value="church">平安教堂</option></select>
+          <input id="d-date" type="date" value="${today()}"> <input id="d-author" placeholder="署名（例如：值日陪伴員 小雲）"></p>
+          <textarea id="d-content" maxlength="120" placeholder="今天辛苦了，願你的心比昨天輕一點。"></textarea><p><button class="btn" onclick="publishDaily()">發布</button></p></div>
+          <div class="card"><table><tr><th>日期</th><th>場景</th><th>內容</th><th>署名</th><th>狀態</th><th></th></tr>
+          ${data.dailyMessages.map((m) => `<tr><td>${esc(m.PublishDate)}</td><td>${SCENE[m.Scene] || esc(m.Scene)}</td><td>${esc(m.Content)}</td><td>${esc(m.Author)}</td><td>${tag(m.Status)}</td><td>${m.Status === 'published' ? `<button class="btn soft" onclick="removeContent('DailyMessages','${esc(m.MessageID)}')">移除</button>` : ''}</td></tr>`).join('')}</table></div>`;
+        } else if (tab === 'ann') {
+          v.innerHTML = `<div class="card"><b>發布公告</b><p><select id="a-scene"><option value="all">全部場景</option><option value="temple">靜心佛堂</option><option value="church">平安教堂</option></select>
+          開始 <input id="a-start" type="datetime-local"> 結束 <input id="a-end" type="datetime-local"></p>
+          <textarea id="a-content" maxlength="200" placeholder="例如：本週五 12:30 有三分鐘集體靜心，歡迎一起休息。"></textarea><p><button class="btn" onclick="publishAnn()">發布</button></p></div>
+          <div class="card"><table><tr><th>場景</th><th>內容</th><th>期間</th><th>狀態</th><th></th></tr>
+          ${data.announcements.map((a) => `<tr><td>${SCENE[a.Scene] || esc(a.Scene)}</td><td>${esc(a.Content)}</td><td><small>${esc(a.StartAt)}<br>${esc(a.EndAt)}</small></td><td>${tag(a.Status)}</td><td>${a.Status === 'published' ? `<button class="btn soft" onclick="removeContent('Announcements','${esc(a.AnnouncementID)}')">移除</button>` : ''}</td></tr>`).join('')}</table></div>`;
+        } else if (tab === 'settings') {
+          v.innerHTML = `<div class="card"><p>修改後約 60 秒內生效。</p><table><tr><th>設定</th><th>值</th><th>說明</th><th></th></tr>
+          ${data.settings.map((s) => `<tr><td>${esc(s.Key)}</td><td><input id="s-${esc(s.Key)}" value="${esc(s.Value)}"></td><td>${esc(s.Description)}</td><td><button class="btn" onclick="saveSetting('${esc(s.Key)}')">儲存</button></td></tr>`).join('')}</table></div>`;
+        } else {
+          v.innerHTML = `<div class="card"><table><tr><th>房間</th><th>場景</th><th>名稱</th><th>人數上限</th><th>啟用</th><th></th></tr>
+          ${data.rooms.map((r) => `<tr><td>${esc(r.RoomID)}</td><td>${SCENE[r.Scene] || esc(r.Scene)}</td><td>${esc(r.RoomName)}</td><td><input id="c-${esc(r.RoomID)}" type="number" min="2" max="50" value="${esc(r.Capacity)}" style="width:70px"></td>
+          <td><input id="e-${esc(r.RoomID)}" type="checkbox" ${String(r.Enabled) === 'true' ? 'checked' : ''}></td><td><button class="btn" onclick="saveRoom('${esc(r.RoomID)}')">儲存</button></td></tr>`).join('')}</table>
+          <p><b>新增房間</b> <input id="n-id" placeholder="temple-2" style="width:90px"> <select id="n-scene"><option value="temple">靜心佛堂</option><option value="church">平安教堂</option></select> <input id="n-name" placeholder="名稱"> <input id="n-cap" type="number" value="25" style="width:60px"> <button class="btn" onclick="addRoom()">新增</button></p></div>`;
+        }
+      }
+      async function approve(id) {
+        const role = $('#r-' + id).value, ident = $('#i-' + id).value, formal = $('#f-' + id).checked;
+        const r = await call('approveHost', id, role, ident, formal);
+        await reload();
+        $('#keybox').innerHTML = `<div class="card"><b>已核准 ${esc(r.nickname)}（${esc(r.role)}）</b><p>請將以下「主持人金鑰」私下交給本人（只會顯示這一次；系統只保存雜湊）。主持人在遊戲中按「🌿 → 主持人登入」貼上即可。</p><div class="key">${esc(r.hostKey)}</div></div>`;
+      }
+      async function reject(id) { if (confirm('確定不通過？')) { await call('rejectHost', id); toast('已更新'); reload(); } }
+      async function disableHost(id) { if (confirm('確定停用此主持人？')) { await call('disableHost', id); toast('已停用'); reload(); } }
+      async function publishDaily() { await call('publishDailyMessage', $('#d-scene').value, $('#d-date').value, $('#d-content').value, $('#d-author').value); toast('已發布'); reload(); }
+      async function publishAnn() { await call('publishAnnouncement', $('#a-scene').value, $('#a-content').value, $('#a-start').value || null, $('#a-end').value || null); toast('已發布'); reload(); }
+      async function removeContent(sheet, id) { if (confirm('確定移除？')) { await call('removeContent', sheet, id); toast('已移除'); reload(); } }
+      async function saveSetting(k) { await call('updateSettings', k, $('#s-' + k).value); toast('已儲存'); reload(); }
+      async function saveRoom(id) { await call('updateRoom', id, $('#e-' + id).checked, $('#c-' + id).value); toast('已儲存'); reload(); }
+      async function addRoom() { await call('addRoom', $('#n-id').value, $('#n-scene').value, $('#n-name').value, $('#n-cap').value); toast('已新增'); reload(); }
+      reload();
+    </script>
+  </body>
+</html>

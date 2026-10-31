@@ -6,10 +6,12 @@
 
 已實作，見 [GAS-SETUP.md](GAS-SETUP.md) 與 [TEST-PHASE2.md](TEST-PHASE2.md)。待辦：正式 GAS 部署後的 CORS 驗證與 5／10／25 人實測。
 
-## Phase 3：值日陪伴員
+## Phase 3、Phase 4
 
-- 申請表寫入 `HostApplications`；管理後台使用**受 Google 帳號限制的獨立 GAS Web App**（以 `Session.getActiveUser()` 於伺服器端比對管理員名單），不在前端放任何密碼。
+已實作，見 [ADMIN-GUIDE.md](ADMIN-GUIDE.md) 與 [TEST-PHASE34.md](TEST-PHASE34.md)。
 
-## Phase 4：療癒功能
+## 可能的後續方向
 
-煩惱寄放所（不上傳）、呼吸練習、今日心情（僅本機）、50 則以上溫暖小語抽卡、貓咪／魚池／祈願樹、天氣擴充。
+- 以授權錄音取代合成誦唱與詩班（見 [ASSETS.md](ASSETS.md)）。
+- 祈福道觀場景（`src/config/scenes.ts` 已保留位置）。
+- 正式環境的管理後台實測、院內實機多人測試。

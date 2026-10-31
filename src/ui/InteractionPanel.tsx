@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { dailyMessage } from '../data/blessings';
+import { WISHES } from '../data/healing';
+import { useNet } from '../net/netStore';
 import type { SceneId } from '../config/scenes';
 import * as A from '../world/actions';
 import { TEMPLE_LAMP_IDS } from '../world/layouts/temple';
@@ -31,6 +33,10 @@ const HINT: Partial<Record<Interactable['kind'], string>> = {
   bench: '坐下來，看看山、聽聽風。',
   pavilion: '在涼亭坐下，遠眺瀑布與山景。',
   waterfall: '坐在溪邊，靜靜欣賞瀑布。',
+  cat: '一隻正在曬太陽的貓咪，輕輕摸摸牠吧。',
+  pond: '撒一點飼料，看錦鯉游過來。',
+  wishTree: '選一句祝福，掛在祈願樹上（只存在你的畫面中）。',
+  flowers: '花開得正好，蝴蝶也來了。',
 };
 
 export function InteractionPanel({ scene }: { scene: SceneId }) {
@@ -47,6 +53,7 @@ export function InteractionPanel({ scene }: { scene: SceneId }) {
   const fishVol = useSettings((s) => s.fish);
   const sound = audioStore.useStore((s) => s.enabled);
   const [reading, setReading] = useState(false);
+  const daily = useNet((s) => s.daily);
 
   if (!it) return null;
   const seated = seatId === it.id;
@@ -163,6 +170,26 @@ export function InteractionPanel({ scene }: { scene: SceneId }) {
     case 'board':
       body = <Btn primary onClick={() => setReading(true)}>閱讀今日祝福</Btn>;
       break;
+    case 'cat':
+      body = <Btn primary onClick={A.petCat}>摸摸貓咪</Btn>;
+      break;
+    case 'pond':
+      body = <Btn primary onClick={A.feedFish}>撒飼料餵魚</Btn>;
+      break;
+    case 'wishTree':
+      body = (
+        <div className="flex flex-wrap gap-1.5">
+          {WISHES.map((w) => (
+            <button key={w} type="button" className="chip border-stone-200 bg-white/80 text-stone-700" onClick={() => A.hangWish(w)}>
+              {w}
+            </button>
+          ))}
+        </div>
+      );
+      break;
+    case 'flowers':
+      body = <Btn primary onClick={A.watchButterflies}>欣賞蝴蝶</Btn>;
+      break;
     case 'bench':
     case 'pavilion':
     case 'waterfall':
@@ -181,8 +208,8 @@ export function InteractionPanel({ scene }: { scene: SceneId }) {
         <div className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center bg-black/25 p-6" onClick={() => setReading(false)}>
           <div className="glass max-w-sm animate-fade-up p-6 text-center" onClick={(e) => e.stopPropagation()}>
             <p className="mb-2 text-xs font-medium text-forest/80">今日祝福</p>
-            <p className="text-lg font-bold leading-relaxed">{dailyMessage(scene === 'temple' ? 'temple' : 'church')}</p>
-            <p className="mt-3 text-[11px] text-stone-500">原創祝福短句；值日陪伴員撰寫的每日一句將於後續版本開放。</p>
+            <p className="text-lg font-bold leading-relaxed">{daily ? daily.content : dailyMessage(scene === 'temple' ? 'temple' : 'church')}</p>
+            <p className="mt-3 text-[11px] text-stone-500">{daily ? `— ${daily.author}` : '網站內建的原創祝福短句'}</p>
             <button type="button" className="btn-primary mt-4" onClick={() => setReading(false)}>
               謝謝
             </button>

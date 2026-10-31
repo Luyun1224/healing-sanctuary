@@ -8,6 +8,29 @@ export const STREAM = { z: 10.2, halfWidth: 1.4, x0: -31, x1: 60 };
 export const BRIDGE = { x: 0, z: STREAM.z, halfWidth: 1.2, halfLength: 1.9, h: 0.45 };
 export const WATERFALL = { x: -33, z: STREAM.z, top: 9 };
 export const WORLD_BOUNDS = 34;
+/** Phase 4 山林探索：貓咪、魚池、祈願樹 */
+export const CAT = { x: 5.2, z: 16.4 };
+export const POND = { x: 16, z: 16, r: 2.1 };
+export const WISH_TREE = { x: -19, z: 5 };
+/** 散步路線（沿步道、過橋、繞花園；遇到障礙會自動跳到下一點） */
+export const WALK_PATH: [number, number][] = [
+  [0, 19],
+  [-9, 17],
+  [-18, 14],
+  [-24, 13.2],
+  [-14, 16.2],
+  [-4, 13.4],
+  [0, 12.8],
+  [0, 7.6],
+  [4, 4.5],
+  [9, 3],
+  [12, 7],
+  [5, 8],
+  [0, 8.4],
+  [0, 12.8],
+  [8, 18],
+  [0, 20],
+];
 
 export const seatY = (surface: number) => surface - 0.33;
 
@@ -31,6 +54,18 @@ export const valleyColliders: Collider[] = [
   { type: 'box', x: BRIDGE.halfWidth + 0.05, z: BRIDGE.z, hw: 0.08, hd: BRIDGE.halfLength },
   // 瀑布山壁
   { type: 'box', x: WATERFALL.x - 3, z: WATERFALL.z, hw: 3, hd: 9 },
+  { type: 'circle', x: POND.x, z: POND.z, r: POND.r + 0.2 },
+  { type: 'circle', x: WISH_TREE.x, z: WISH_TREE.z, r: 0.7 },
+  { type: 'circle', x: CAT.x, z: CAT.z, r: 0.3 },
+];
+
+/** 共用物件周圍不種樹 */
+export const valleyClear: Rect[] = [
+  { x: CAT.x, z: CAT.z, hw: 1.6, hd: 1.4 },
+  { x: POND.x, z: POND.z, hw: 3.6, hd: 3.4 },
+  { x: WISH_TREE.x, z: WISH_TREE.z, hw: 3, hd: 3 },
+  { x: -10, z: 16, hw: 14, hd: 2.6 },
+  { x: 8, z: 4, hw: 5.5, hd: 3.5 },
 ];
 
 export const valleyFloors: Floor[] = [{ type: 'archZ', x: BRIDGE.x, z: BRIDGE.z, hw: BRIDGE.halfWidth, hd: BRIDGE.halfLength, h: BRIDGE.h }];
@@ -39,6 +74,9 @@ export const PAVILION = { x: -12, z: 3 };
 export const STREAM_BENCH = { x: 7, z: 13.4 };
 
 export const valleyInteractables: Interactable[] = [
+  { id: 'cat', kind: 'cat', label: '曬太陽的貓咪', x: CAT.x, z: CAT.z, r: 1.6, face: [CAT.x, CAT.z] },
+  { id: 'pond', kind: 'pond', label: '錦鯉池', x: POND.x - 2.7, z: POND.z, r: 1.5, face: [POND.x, POND.z] },
+  { id: 'wish-tree', kind: 'wishTree', label: '祈願樹', x: WISH_TREE.x + 1.6, z: WISH_TREE.z + 0.8, r: 1.7, face: [WISH_TREE.x, WISH_TREE.z] },
   {
     id: 'waterfall',
     kind: 'waterfall',

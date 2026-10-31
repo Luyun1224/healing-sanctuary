@@ -38,6 +38,15 @@ export interface WorldState {
   track: 'zen' | 'garden' | 'piano' | 'organ' | null;
   /** 點擊地面移動的目標 */
   moveTarget: [number, number] | null;
+  /** Phase 4 山林探索 */
+  catPetAt: number;
+  pondFeedAt: number;
+  wishes: string[];
+  butterflyAt: number;
+  /** 煩惱寄放所：飄走中的樹葉（文字只存在記憶體，動畫結束即清除） */
+  leaves: { id: number; text: string; at: number }[];
+  walking: boolean;
+  walkIdx: number;
 }
 
 const counts = load('counts', { fish: 0 });
@@ -60,6 +69,13 @@ export const worldStore = createStore<WorldState>({
   toast: null,
   track: null,
   moveTarget: null,
+  catPetAt: 0,
+  pondFeedAt: 0,
+  wishes: [],
+  butterflyAt: 0,
+  leaves: [],
+  walking: false,
+  walkIdx: 0,
 });
 export const useWorld = worldStore.useStore;
 
@@ -98,6 +114,9 @@ export function resetWorld(scene: SceneId) {
     moveTarget: null,
     litLamps: [],
     litCandles: [],
+    wishes: [],
+    leaves: [],
+    walking: false,
   });
 }
 
@@ -127,6 +146,7 @@ export function standUp() {
   const s = worldStore.get();
   if (!s.seat && s.baseAnim === 'idle' && !s.fishAuto && !s.meditation) return;
   worldStore.set({ seat: null, baseAnim: 'idle', eyesClosed: false, fishAuto: false, meditation: null });
+  player.face = null;
 }
 
 export function strikeFish() {

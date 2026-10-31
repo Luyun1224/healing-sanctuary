@@ -74,6 +74,7 @@ function setup() {
     settings.appendRow(['baseSyncMs', '6000', '基本輪詢間隔（毫秒），人數多時自動拉長', now]);
     settings.appendRow(['maxSyncMs', '10000', '輪詢間隔上限（毫秒）', now]);
     settings.appendRow(['interactionsEnabled', 'true', '玩家預設互動（揮手、祝福泡泡）開關', now]);
+    settings.appendRow(['blockedWords', '', '不允許出現在暱稱中的字詞（逗號分隔）', now]);
   }
   return 'setup done';
 }
@@ -108,7 +109,7 @@ function respond(obj) {
 function handle(action, p, isGet) {
   try {
     // 公開讀取：GET / POST 皆可
-    if (action === 'ping') return { ok: true, service: 'healing-sanctuary', version: 2 };
+    if (action === 'ping') return { ok: true, service: 'healing-sanctuary', version: 3 };
     if (action === 'getRooms') return { ok: true, rooms: getRooms_() };
     if (action === 'getSettings') return { ok: true, settings: publicSettings_() };
     if (action === 'getDailyMessage') return { ok: true, message: getDailyMessage_(p.scene) };
@@ -119,6 +120,8 @@ function handle(action, p, isGet) {
     if (action === 'syncRoomState') return syncRoomState_(p);
     if (action === 'leaveRoom') return leaveRoom_(p);
     if (action === 'sendPresetInteraction') return sendPresetInteraction_(p);
+    if (action === 'sendInvitation') return sendInvitation_(p);
+    if (action === 'submitHostApplication') return submitHostApplication_(p);
     return { ok: false, error: 'unknown_action' };
   } catch (err) {
     console.error(action, err && err.stack ? err.stack : err);
@@ -375,6 +378,14 @@ function joinRoom_(p) {
   if (!room) return { ok: false, error: 'room_not_found' };
   var nickname = nickname_(p.nickname);
   if (!nickname) return { ok: false, error: 'bad_nickname' };
+  // 管理員可在 Settings 的 blockedWords 設定不適當暱稱關鍵字（逗號分隔）
+  var blocked = String(settingsMap_().blockedWords || '')
+    .split(',')
+    .map(function (w) {
+      return w.trim();
+    })
+    .filter(String);
+  if (blocked.some(function (w) { return nickname.indexOf(w) >= 0; })) return { ok: false, error: 'bad_nickname' };
   var st = state_(p.state) || { x: 0, y: 0, z: 21, r: Math.PI, a: 'idle', e: false };
 
   // 同一分頁重新整理：持有有效 token 時沿用原本的玩家 ID
@@ -396,7 +407,9 @@ function joinRoom_(p) {
   if (!res.ok) return res;
 
   var now = Date.now();
-  var rec = { id: pid, n: nickname, av: avatar_(p.avatar), s: st, seen: now, v: 1 };
+  var host = p.hostKey ? verifyHost_(str_(p.hostKey, 80), room.scene) : null;
+  if (p.hostKey && !host) return { ok: false, error: 'bad_host_key' };
+  var rec = { id: pid, n: nickname, av: avatar_(p.avatar), s: st, seen: now, v: 1, h: host ? host.role : '' };
   cache_().put(pKey_(room.roomId, pid), JSON.stringify(rec), CFG.PLAYER_TTL_S);
   cache_().put('tok:' + pid, token, CFG.TOKEN_TTL_S);
   bumpSummary_(room.scene, res.online);
@@ -404,6 +417,7 @@ function joinRoom_(p) {
   snapshot.playerId = pid;
   snapshot.token = token;
   snapshot.room = room;
+  snapshot.hostRole = rec.h;
   return snapshot;
 }
 
@@ -441,7 +455,7 @@ function roomSnapshot_(roomId, selfId, sinceEvent) {
       return x.id !== selfId;
     })
     .map(function (x) {
-      return { id: x.id, n: x.n, av: x.av, s: x.s, seen: x.seen, v: x.v };
+      return { id: x.id, n: x.n, av: x.av, s: x.s, seen: x.seen, v: x.v, h: x.h || '' };
     });
   var online = cur.alive.length + (selfId && !cur.alive.some(function (x) { return x.id === selfId; }) ? 1 : 0);
   return { ok: true, online: online, players: others, events: readEvents_(roomId, sinceEvent), interval: syncInterval_(online) };
@@ -554,4 +568,93 @@ function bumpSummary_(scene, online) {
     }
   }
   cache_().put(key, JSON.stringify(s), 6 * 3600);
+}
+
+/* ============================== Phase 3：陪伴主持人 ============================== */
+
+var HOST_ROLES = ['值日陪伴員', '虛擬住持', '神父', '牧師'];
+
+function sha256Hex_(text) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8);
+  return bytes
+    .map(function (b) {
+      var v = (b < 0 ? b + 256 : b).toString(16);
+      return v.length === 1 ? '0' + v : v;
+    })
+    .join('');
+}
+
+/** 主持人金鑰的雜湊即為 HostID；試算表只保存雜湊，不保存金鑰本身 */
+function hostIdFromKey_(key) {
+  return 'h_' + sha256Hex_('healing-sanctuary:' + key).slice(0, 24);
+}
+
+/**
+ * 驗證主持人金鑰：HostPermissions 中狀態為 active、場景相符（或 all）。
+ * 每分鐘最多 20 次錯誤嘗試，超過時暫停驗證（金鑰為隨機 UUID，本來就無法猜測）。
+ */
+function verifyHost_(key, scene) {
+  if (!key) return null;
+  var failKey = 'hostfail:' + Math.floor(Date.now() / 60000);
+  var fails = Number(cache_().get(failKey) || 0);
+  if (fails >= 20) return null;
+  var id = hostIdFromKey_(key);
+  var rows = readSheet_('HostPermissions').filter(function (r) {
+    return String(r.HostID) === id && String(r.Status) === 'active' && (String(r.Scene) === scene || String(r.Scene) === 'all');
+  });
+  if (!rows.length) {
+    cache_().put(failKey, String(fails + 1), 120);
+    return null;
+  }
+  var role = String(rows[0].Role);
+  return { role: HOST_ROLES.indexOf(role) >= 0 ? role : '值日陪伴員' };
+}
+
+/** 主持人發送集體靜心邀請（玩家可自由選擇是否參加；不會強制切換任何人的畫面或音樂） */
+function sendInvitation_(p) {
+  var pid = checkToken_(p);
+  if (!pid) return { ok: false, error: 'invalid_token' };
+  var roomId = str_(p.roomId, 40);
+  var raw = cache_().get(pKey_(roomId, pid));
+  var rec = raw ? JSON.parse(raw) : null;
+  if (!rec || !rec.h) return { ok: false, error: 'not_host' };
+  var minutes = [1, 3, 5].indexOf(Number(p.minutes)) >= 0 ? Number(p.minutes) : 3;
+  var cdKey = 'invite:' + roomId;
+  var now = Date.now();
+  if (now - Number(cache_().get(cdKey) || 0) < 5 * 60 * 1000) return { ok: false, error: 'cooldown', retryAfter: 60000 };
+  cache_().put(cdKey, String(now), 600);
+  return withLock_(function () {
+    var evRaw = cache_().get('ev:' + roomId);
+    var list = evRaw ? JSON.parse(evRaw) : [];
+    var seq = list.length ? list[list.length - 1].seq + 1 : 1;
+    list.push({ seq: seq, from: pid, to: '', preset: 'invite', minutes: minutes, startAt: now + 30000, at: now });
+    list = list.slice(-CFG.EVENTS_KEEP);
+    cache_().put('ev:' + roomId, JSON.stringify(list), CFG.EVENTS_TTL_S);
+    return { ok: true, seq: seq };
+  });
+}
+
+/** 申請成為值日陪伴員：寫入 HostApplications（待審核）。全站每小時最多 30 筆，避免濫用 */
+function submitHostApplication_(p) {
+  var nickname = nickname_(p.nickname);
+  var scene = SCENES.indexOf(String(p.scene)) >= 0 ? String(p.scene) : '';
+  var date = String(p.requestedDate || '');
+  var intro = str_(p.introduction, 200);
+  if (!nickname || !scene || !/^\d{4}-\d{2}-\d{2}$/.test(date) || intro.length < 5) return { ok: false, error: 'invalid' };
+  var d = new Date(date + 'T00:00:00+08:00').getTime();
+  if (!isFinite(d) || d < Date.now() - 86400000 || d > Date.now() + 90 * 86400000) return { ok: false, error: 'invalid_date' };
+  var rateKey = 'apply:' + Math.floor(Date.now() / 3600000);
+  var count = Number(cache_().get(rateKey) || 0);
+  if (count >= 30) return { ok: false, error: 'too_many', retryAfter: 3600000 };
+  cache_().put(rateKey, String(count + 1), 3700);
+  return withLock_(function () {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('HostApplications');
+    var id = 'A' + Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyMMddHHmmss') + Math.floor(Math.random() * 90 + 10);
+    // 防止試算表公式注入：以單引號開頭的文字不會被當成公式
+    var safe = function (v) {
+      return /^[=+\-@]/.test(v) ? "'" + v : v;
+    };
+    sh.appendRow([id, safe(nickname), scene, date, safe(intro), 'pending', new Date()]);
+    return { ok: true, applicationId: id };
+  });
 }

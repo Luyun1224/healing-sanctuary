@@ -9,6 +9,7 @@ import {
   valleyFloors,
   valleyInteractables,
   valleyWater,
+  valleyClear,
 } from './valley';
 
 /**
@@ -43,6 +44,7 @@ const pav = pavilion('木造涼亭');
 const interior: Rect = { x: 0, z: (H.z0 + H.z1) / 2, hw: (H.x1 - H.x0) / 2, hd: (H.z1 - H.z0) / 2 };
 
 const clear: Rect[] = [
+  ...valleyClear,
   { x: P.x, z: P.z, hw: P.hw + 1, hd: P.hd + 1 },
   { x: 0, z: 10, hw: 2.6, hd: 14 }, // 主步道
   { x: TEMPLE.bell.x, z: TEMPLE.bell.z, hw: 2.6, hd: 2.6 },
@@ -102,6 +104,7 @@ const interactables: Interactable[] = [
   })),
   { id: 'temple-bell', kind: 'templeBell', label: '寺院鐘', x: TEMPLE.bell.x, z: TEMPLE.bell.z + 2, r: 1.8, face: [TEMPLE.bell.x, TEMPLE.bell.z] },
   pav.seat,
+  { id: "flowers", kind: "flowers", label: "花圃", x: 2.4, z: 6.1, r: 1.6 },
   ...valleyInteractables,
 ];
 

@@ -21,6 +21,8 @@ export interface RemotePlayer {
   receivedAt: number;
   version: number;
   seated: '' | 's' | 'm';
+  /** 主持人角色（值日陪伴員、虛擬住持、神父、牧師）；一般玩家為空字串 */
+  role: string;
   /** 收到預設互動時的一次性動作 */
   gesture: { anim: Anim; until: number } | null;
   /** 插值移動速度 */
@@ -45,6 +47,13 @@ export const netStore = createStore({
   interval: 6000,
   lastOkAt: 0,
   selfId: '',
+  /** 自己的主持人角色 */
+  hostRole: '',
+  /** 由值日陪伴員／管理員發布的每日一句與公告（沒有時使用網站內建內容） */
+  daily: null as { content: string; author: string } | null,
+  announcements: [] as { id: string; content: string }[],
+  /** 收到的集體靜心邀請（自由選擇是否參加） */
+  invite: null as { id: number; nickname: string; role: string; minutes: number; startAt: number } | null,
 });
 export const useNet = netStore.useStore;
 

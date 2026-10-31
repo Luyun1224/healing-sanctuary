@@ -9,6 +9,7 @@ import { Sky } from './env/Sky';
 import { PhaseCtx, useDayPhase } from './env/useDayPhase';
 import { ChurchScene } from './scenes/Church';
 import { TempleScene } from './scenes/Temple';
+import { Explore } from './scenes/Explore';
 import { MoveMarker, Player } from './Player';
 import { RemotePlayers } from './RemotePlayers';
 import { useSettings } from './settings';
@@ -47,6 +48,7 @@ export function WorldCanvas({ scene, avatar, nickname }: { scene: Exclude<SceneI
           <Ground />
           <Stream reduceMotion={reduceMotion} />
           {scene === 'temple' ? <TempleScene low={low} reduceMotion={reduceMotion} /> : <ChurchScene low={low} reduceMotion={reduceMotion} />}
+          <Explore />
         </group>
         <MoveMarker layout={layout} />
         <Player layout={layout} avatar={avatar} nickname={nickname} />

@@ -897,6 +897,60 @@ class AudioEngine {
     this.bell(392, CHURCH_BELL, 0.14);
   }
 
+  /** 貓咪呼嚕：低通棕噪音以每秒約 24 次的節奏起伏，約 3.5 秒 */
+  playPurr() {
+    const ctx = this.ctx;
+    if (!ctx || !this.enabled) return;
+    const t = ctx.currentTime + 0.02;
+    const src = ctx.createBufferSource();
+    src.buffer = this.brown;
+    src.loop = true;
+    const lp = this.biquad('lowpass', 320, 0.7);
+    const am = ctx.createGain();
+    am.gain.value = 0.5;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 24;
+    const la = ctx.createGain();
+    la.gain.value = 0.5;
+    lfo.connect(la).connect(am.gain);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.4);
+    g.gain.setValueAtTime(0.5, t + 2.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 3.6);
+    src.connect(lp).connect(am).connect(g).connect(this.sfx);
+    src.start(t);
+    lfo.start(t);
+    src.stop(t + 3.7);
+    lfo.stop(t + 3.7);
+  }
+
+  /** 撒飼料：細小的水花與水滴聲 */
+  playSplash() {
+    const ctx = this.ctx;
+    if (!ctx || !this.enabled) return;
+    const t = ctx.currentTime + 0.02;
+    for (let i = 0; i < 5; i++) {
+      const s = t + 0.15 + i * rand(0.06, 0.14);
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.setValueAtTime(rand(900, 1500), s);
+      o.frequency.exponentialRampToValueAtTime(rand(1800, 2600), s + 0.05);
+      this.env(g, s, 0.05, 0.003, 0.07);
+      o.connect(g).connect(this.sfx);
+      o.start(s);
+      o.stop(s + 0.1);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const bp = this.biquad('bandpass', 1800, 0.8);
+    const g = ctx.createGain();
+    this.env(g, t + 0.1, 0.06, 0.01, 0.25);
+    src.connect(bp).connect(g).connect(this.sfx);
+    src.start(t + 0.1, Math.random());
+    src.stop(t + 0.45);
+  }
+
   /** 點燈、點蠟燭的柔和鈴音 */
   playChime() {
     const ctx = this.ctx;

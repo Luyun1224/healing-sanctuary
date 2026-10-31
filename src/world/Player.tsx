@@ -7,11 +7,14 @@ import type { AvatarConfig } from '../data/avatar';
 import { audio } from '../audio/engine';
 import { Chibi, type PoseInput } from './character/Chibi';
 import { Bubble } from './RemotePlayers';
+import { useNet } from '../net/netStore';
 import { heightAt, resolveCollisions } from './physics';
+import { WALK_PATH } from './layouts/valley';
 import type { SceneLayout } from './types';
 import { input, player, standUp, worldStore } from './worldStore';
 
 const WALK_SPEED = 3.1;
+const STROLL_SPEED = 1.6;
 const CAM_HEIGHT = 1.0;
 const tmpF = new THREE.Vector3();
 const tmpR = new THREE.Vector3();
@@ -34,6 +37,7 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const portrait = useThree((s) => s.size.width < s.size.height);
+  const role = useNet((s) => s.hostRole);
   const lastCheck = useRef(0);
   const prevTarget = useMemo(() => new THREE.Vector3(), []);
 
@@ -65,7 +69,12 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
     const iz = THREE.MathUtils.clamp(input.z + input.joyZ, -1, 1);
     tmpMove.set(0, 0, 0).addScaledVector(tmpF, iz).addScaledVector(tmpR, ix);
     let mag = Math.min(1, tmpMove.length());
-    if (mag > 0.08 && s.moveTarget) worldStore.set({ moveTarget: null });
+    if (mag > 0.08 && s.moveTarget) worldStore.set({ moveTarget: null, walking: false });
+    // 沿小徑散步：抵達（或被擋住）就前往下一個路點
+    if (mag <= 0.08 && s.walking && !s.moveTarget) {
+      const i = (s.walkIdx + 1) % WALK_PATH.length;
+      worldStore.set({ walkIdx: i, moveTarget: WALK_PATH[i] });
+    }
     if (mag <= 0.08 && s.moveTarget) {
       const dx = s.moveTarget[0] - player.pos.x;
       const dz = s.moveTarget[1] - player.pos.z;
@@ -84,7 +93,7 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
       if (s.gesture) worldStore.set({ gesture: null });
       player.face = null;
       tmpMove.normalize();
-      const step = WALK_SPEED * mag * dt;
+      const step = (s.walking ? STROLL_SPEED : WALK_SPEED) * mag * dt;
       const p = { x: player.pos.x + tmpMove.x * step, z: player.pos.z + tmpMove.z * step };
       const before = { x: player.pos.x, z: player.pos.z };
       resolveCollisions(layout, p);
@@ -109,7 +118,7 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
       }
     }
     player.moving = moving;
-    player.speed = moving ? mag : 0;
+    player.speed = moving ? (s.walking ? mag * 0.5 : mag) : 0;
 
     // ---- 動作狀態 ----
     let anim = s.baseAnim;
@@ -190,7 +199,10 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
       <Html position={[0, 1.62, 0]} center zIndexRange={[20, 0]} pointerEvents="none">
         <div className="nameplate flex flex-col items-center">
           <Bubble playerId="self" />
-          <div className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-bold text-forest shadow">{nickname}</div>
+          <div className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-bold text-forest shadow">
+            {role && <span className="mr-1 rounded-full bg-honey/80 px-1.5 text-[10px] text-stone-700">{role}</span>}
+            {nickname}
+          </div>
         </div>
       </Html>
     </group>
