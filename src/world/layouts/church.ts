@@ -27,6 +27,8 @@ export const CHURCH = {
   tower: { x: -6.6, z: -4.8, hw: 1.3, hd: 1.3 },
   board: { x: 2.9, z: -1.0 },
   bench: { x: 11, z: -2 },
+  /** 祝福蠟燭附近的奉獻箱與祝福留言牆（靠左牆、面向室內） */
+  offering: { x: -4.45, z: -12.65 },
 };
 
 const P = CHURCH.platform;
@@ -83,6 +85,7 @@ const interactables: Interactable[] = [
       };
     }),
   ),
+  { id: 'offering', kind: 'offering', label: '祝福留言牆', x: CHURCH.offering.x + 1.05, z: CHURCH.offering.z, r: 1.1, face: [CHURCH.offering.x, CHURCH.offering.z] },
   { id: 'altar', kind: 'altar', label: '祭壇前', x: 0, z: -12.9, r: 1.3, face: [CHURCH.altar.x, CHURCH.altar.z] },
   { id: 'candles', kind: 'candles', label: '祝福蠟燭', x: CHURCH.candles.x + 0.9, z: CHURCH.candles.z + 0.6, r: 1.5, face: [CHURCH.candles.x, CHURCH.candles.z] },
   {
@@ -123,6 +126,7 @@ const colliders: Collider[] = [
   ...CHURCH.pews.xs.flatMap((x) => CHURCH.pews.zs.map((z): Collider => ({ type: 'box', x, z: z - 0.05, hw: CHURCH.pews.hw, hd: 0.22 }))),
   { type: 'box', x: CHURCH.altar.x, z: CHURCH.altar.z, hw: 1.3, hd: 0.45 },
   { type: 'box', x: CHURCH.candles.x, z: CHURCH.candles.z, hw: 0.55, hd: 0.35 },
+  { type: 'box', x: CHURCH.offering.x, z: CHURCH.offering.z, hw: 0.4, hd: 0.6 },
   { type: 'box', x: CHURCH.piano.x, z: CHURCH.piano.z, hw: 0.75, hd: 0.45 },
   { type: 'box', x: CHURCH.tower.x, z: CHURCH.tower.z, hw: CHURCH.tower.hw, hd: CHURCH.tower.hd },
   { type: 'box', x: CHURCH.board.x, z: CHURCH.board.z, hw: 0.6, hd: 0.15 },

@@ -28,7 +28,8 @@ export type InteractKind =
   | 'cat'
   | 'pond'
   | 'wishTree'
-  | 'flowers';
+  | 'flowers'
+  | 'offering';
 
 /** 座位：角色坐下時的位置（x,z）、根節點高度、面向角度 */
 export interface Seat {

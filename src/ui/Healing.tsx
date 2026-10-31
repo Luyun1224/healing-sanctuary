@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { SceneId } from '../config/scenes';
-import { loadProfile } from '../data/avatar';
 import { BREATH_PACES, MOODS, drawCard } from '../data/healing';
-import { callGas } from '../net/api';
 import { netStore, useNet } from '../net/netStore';
-import { hostKeyName, sync } from '../net/sync';
+import { sync } from '../net/sync';
 import * as A from '../world/actions';
 import { showToast, useWorld } from '../world/worldStore';
 
 type Scene = Exclude<SceneId, 'taoist'>;
-export type HealingView = 'menu' | 'breath' | 'worry' | 'mood' | 'card' | 'apply' | 'hostLogin' | 'hostTools' | null;
+export type HealingView = 'menu' | 'breath' | 'worry' | 'mood' | 'card' | 'invite' | null;
 
 function Sheet({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
@@ -28,7 +26,6 @@ function Sheet({ title, onClose, children, wide }: { title: string; onClose: () 
 /** 療癒選單與各項功能面板 */
 export function HealingPanel({ view, setView, scene }: { view: HealingView; setView: (v: HealingView) => void; scene: Scene }) {
   const walking = useWorld((s) => s.walking);
-  const hostRole = useNet((s) => s.hostRole);
   const online = useNet((s) => s.status === 'online');
   const close = () => setView(null);
   if (!view) return null;
@@ -42,10 +39,7 @@ export function HealingPanel({ view, setView, scene }: { view: HealingView; setV
       walking
         ? { icon: '⏹️', label: '停止散步', sub: '回到自由走動', on: () => (A.stopWalk(), close()) }
         : { icon: '🚶', label: '沿著小徑散步', sub: '自動慢慢走一圈，按方向鍵即停止', on: () => (A.startWalk(), close()) },
-      { icon: '🤝', label: '申請成為值日陪伴員', sub: '每日問候、陪大家休息', on: () => setView('apply') },
-      hostRole
-        ? { icon: '🔔', label: '主持人工具', sub: `目前身分：${hostRole}`, on: () => setView('hostTools') }
-        : { icon: '🔑', label: '主持人登入', sub: '使用管理員核發的主持人金鑰', on: () => setView('hostLogin') },
+      ...(online ? [{ icon: '🔔', label: '邀請大家一起靜心', sub: '同一個空間的人可以自由選擇是否參加', on: () => setView('invite') }] : []),
     ];
     return (
       <Sheet title="🌿 療癒小角落" onClose={close}>
@@ -66,9 +60,7 @@ export function HealingPanel({ view, setView, scene }: { view: HealingView; setV
   if (view === 'worry') return <Worry onClose={close} />;
   if (view === 'mood') return <Mood onClose={close} openBreath={() => setView('breath')} />;
   if (view === 'card') return <CardDraw onClose={close} scene={scene} />;
-  if (view === 'apply') return <Apply onClose={close} scene={scene} online={online} />;
-  if (view === 'hostLogin') return <HostLogin onClose={close} scene={scene} />;
-  if (view === 'hostTools') return <HostTools onClose={close} />;
+  if (view === 'invite') return <Invite onClose={close} />;
   return null;
 }
 
@@ -169,75 +161,11 @@ function CardDraw({ onClose, scene }: { onClose: () => void; scene: Scene }) {
   );
 }
 
-function Apply({ onClose, scene, online }: { onClose: () => void; scene: Scene; online: boolean }) {
-  const [form, setForm] = useState({ nickname: loadProfile(scene)?.nickname ?? '', scene, requestedDate: new Date(Date.now() + 8 * 3600e3 + 86400e3).toISOString().slice(0, 10), introduction: '' });
-  const [state, setState] = useState<'idle' | 'sending' | 'done'>('idle');
-  const submit = async () => {
-    setState('sending');
-    const res = await callGas<{ applicationId: string }>('submitHostApplication', form);
-    if (res.ok) setState('done');
-    else {
-      setState('idle');
-      showToast(res.error === 'invalid_date' ? '日期需在今天起 90 天內' : res.error === 'invalid' ? '請完整填寫（自我介紹至少 5 個字）' : '暫時無法送出，請稍後再試');
-    }
-  };
-  if (state === 'done')
-    return (
-      <Sheet title="🤝 申請已送出" onClose={onClose}>
-        <p className="leading-relaxed">謝謝你願意陪伴大家！管理員審核後，會私下提供「主持人金鑰」給你。</p>
-      </Sheet>
-    );
-  return (
-    <Sheet title="🤝 申請成為值日陪伴員" onClose={onClose}>
-      <p className="mb-2 text-xs leading-relaxed text-stone-500">值日陪伴員負責每日問候、正向鼓勵與簡短陪伴，不是心理治療或宗教諮詢。正式宗教職稱（住持、神父、牧師）只提供給具相應身分或經授權者。</p>
-      <div className="space-y-2 text-sm">
-        <input className="w-full rounded-xl border border-stone-300 px-3 py-2" placeholder="暱稱" maxLength={12} value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} />
-        <div className="flex gap-2">
-          <select className="flex-1 rounded-xl border border-stone-300 px-2 py-2" value={form.scene} onChange={(e) => setForm({ ...form, scene: e.target.value as Scene })}>
-            <option value="temple">靜心佛堂</option>
-            <option value="church">平安教堂</option>
-          </select>
-          <input type="date" className="flex-1 rounded-xl border border-stone-300 px-2 py-2" value={form.requestedDate} onChange={(e) => setForm({ ...form, requestedDate: e.target.value })} />
-        </div>
-        <textarea className="h-20 w-full rounded-xl border border-stone-300 p-2" maxLength={200} placeholder="簡短自我介紹（不需真實姓名）" value={form.introduction} onChange={(e) => setForm({ ...form, introduction: e.target.value })} />
-        <button type="button" className="btn-primary w-full" disabled={state === 'sending' || !online} onClick={submit}>
-          {state === 'sending' ? '送出中…' : '送出申請'}
-        </button>
-        {!online && <p className="text-xs text-amber-700">目前無法連線到伺服器，請稍後再試。</p>}
-      </div>
-    </Sheet>
-  );
-}
-
-function HostLogin({ onClose, scene }: { onClose: () => void; scene: Scene }) {
-  const [key, setKey] = useState('');
-  return (
-    <Sheet title="🔑 主持人登入" onClose={onClose}>
-      <p className="mb-2 text-xs leading-relaxed text-stone-500">請貼上管理員核發的主持人金鑰。金鑰只會保存在這個瀏覽器分頁，關閉分頁後需重新輸入；共用電腦請記得關閉分頁。</p>
-      <input className="w-full rounded-xl border border-stone-300 px-3 py-2 font-mono text-sm" value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-      <button
-        type="button"
-        className="btn-primary mt-2 w-full"
-        disabled={key.length < 30}
-        onClick={() => {
-          sessionStorage.setItem(hostKeyName(scene), key);
-          sync.restart();
-          onClose();
-        }}
-      >
-        登入
-      </button>
-    </Sheet>
-  );
-}
-
-function HostTools({ onClose }: { onClose: () => void }) {
-  const role = useNet((s) => s.hostRole);
-  const daily = useNet((s) => s.daily);
+function Invite({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
-    <Sheet title={`🔔 ${role}工具`} onClose={onClose}>
-      <p className="mb-2 text-sm">發送集體靜心邀請給同一房間的人（每 5 分鐘一次）。大家可自由選擇是否參加，不會被強制切換畫面或音樂。</p>
+    <Sheet title="🔔 邀請大家一起靜心" onClose={onClose}>
+      <p className="mb-3 text-sm leading-relaxed">同一個空間的人會收到邀請卡，可以自由選擇是否參加，不會被強制切換畫面或音樂。每個空間每 5 分鐘可以邀請一次。</p>
       <div className="flex gap-2">
         {[1, 3, 5].map((m) => (
           <button
@@ -257,18 +185,6 @@ function HostTools({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
-      <p className="mt-3 text-xs text-stone-500">今日一句：{daily ? `「${daily.content}」` : '尚未發布（可請管理員在後台發布，你靠近同事時會以對話泡泡顯示）'}</p>
-      <button
-        type="button"
-        className="btn-soft mt-3 w-full border border-stone-200"
-        onClick={() => {
-          for (const k of Object.keys(sessionStorage)) if (k.startsWith('healing-sanctuary:hostKey:')) sessionStorage.removeItem(k);
-          sync.restart();
-          onClose();
-        }}
-      >
-        登出主持人身分
-      </button>
     </Sheet>
   );
 }
@@ -357,9 +273,7 @@ export function InviteCard({ onJoin }: { onJoin: (minutes: number, startAt: numb
   const dismiss = () => netStore.set({ invite: null });
   return (
     <div className="glass pointer-events-auto w-[min(94vw,380px)] animate-fade-up p-3">
-      <p className="text-xs text-forest/80">
-        {invite.role}・{invite.nickname}
-      </p>
+      <p className="text-xs text-forest/80">{invite.nickname} 邀請你</p>
       <p className="font-bold">{invite.minutes} 分鐘靜心即將開始，歡迎一起休息。</p>
       <div className="mt-2 flex gap-2">
         <button

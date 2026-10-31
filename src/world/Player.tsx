@@ -7,7 +7,6 @@ import type { AvatarConfig } from '../data/avatar';
 import { audio } from '../audio/engine';
 import { Chibi, type PoseInput } from './character/Chibi';
 import { Bubble } from './RemotePlayers';
-import { useNet } from '../net/netStore';
 import { heightAt, resolveCollisions } from './physics';
 import { WALK_PATH } from './layouts/valley';
 import type { SceneLayout } from './types';
@@ -37,7 +36,6 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const portrait = useThree((s) => s.size.width < s.size.height);
-  const role = useNet((s) => s.hostRole);
   const lastCheck = useRef(0);
   const prevTarget = useMemo(() => new THREE.Vector3(), []);
 
@@ -199,10 +197,7 @@ export function Player({ layout, avatar, nickname }: { layout: SceneLayout; avat
       <Html position={[0, 1.62, 0]} center zIndexRange={[20, 0]} pointerEvents="none">
         <div className="nameplate flex flex-col items-center">
           <Bubble playerId="self" />
-          <div className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-bold text-forest shadow">
-            {role && <span className="mr-1 rounded-full bg-honey/80 px-1.5 text-[10px] text-stone-700">{role}</span>}
-            {nickname}
-          </div>
+          <div className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-bold text-forest shadow">{nickname}</div>
         </div>
       </Html>
     </group>

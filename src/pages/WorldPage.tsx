@@ -21,6 +21,7 @@ import { audio } from '../audio/engine';
 import { WorldCanvas } from '../world/WorldCanvas';
 import { useNet } from '../net/netStore';
 import { sync } from '../net/sync';
+import { refreshBlessings } from '../net/blessings';
 import { Greetings } from '../ui/Greetings';
 import { Breathing, HealingPanel, InviteCard, type HealingView } from '../ui/Healing';
 import { resetWorld, showToast, useWorld, worldStore } from '../world/worldStore';
@@ -81,6 +82,13 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
   useEffect(() => {
     if (!profile) navigate(`/create/${scene}`);
   }, [profile, scene]);
+
+  // 祈福留言板：進入場景時讀取，之後每 2 分鐘更新
+  useEffect(() => {
+    void refreshBlessings(scene);
+    const id = window.setInterval(() => void refreshBlessings(scene), 120_000);
+    return () => window.clearInterval(id);
+  }, [scene]);
 
   // 多人同步：進入場景時加入房間，離開時通知伺服器
   const nick = profile?.nickname;
@@ -240,7 +248,7 @@ function DailyCard({ scene, open, setOpen }: { scene: 'temple' | 'church'; open:
           <p className="leading-relaxed">{daily ? daily.content : dailyMessage(scene)}</p>
           {daily?.author && <p className="text-right text-[11px] text-stone-500">— {daily.author}</p>}
           <div className="border-t border-stone-200 pt-2 text-[11px] text-stone-600">
-            {ann.length ? ann.map((a) => <p key={a.id}>📢 {a.content}</p>) : <p className="text-stone-500">主持人公告：目前沒有公告</p>}
+            {ann.length ? ann.map((a) => <p key={a.id}>📢 {a.content}</p>) : <p className="text-stone-500">公告：目前沒有公告</p>}
           </div>
         </div>
       )}
@@ -264,8 +272,8 @@ function Help({ touch, scene, onClose }: { touch: boolean; scene: 'temple' | 'ch
       )}
       <p>
         {scene === 'temple'
-          ? '走進佛堂：木魚、蒲團、佛像、平安燈都可以互動；外面還有鐘亭、涼亭與瀑布。'
-          : '走進教堂：長椅、祭壇、祝福蠟燭、鋼琴都可以互動；外面有鐘樓、花園與瀑布。'}
+          ? '走進佛堂：木魚、蒲團、佛像、平安燈、祈福留言板都可以互動；外面還有鐘亭、涼亭、瀑布、貓咪與魚池。'
+          : '走進教堂：長椅、祭壇、祝福蠟燭、祝福留言牆、鋼琴都可以互動；外面有鐘樓、花園、瀑布、貓咪與魚池。'}
       </p>
       <p className="text-xs text-stone-500">聲音預設關閉，點右上角「開啟聲音」即可播放自然音。</p>
       <button type="button" className="btn-primary w-full" onClick={onClose}>

@@ -31,6 +31,8 @@ export const TEMPLE = {
     [2.9, -7.0],
   ] as [number, number][],
   bell: { x: 11, z: -4 },
+  /** 平安燈旁的功德箱與祈福留言板（靠右牆、面向室內） */
+  offering: { x: 5.35, z: -5.1 },
 };
 
 const P = TEMPLE.platform;
@@ -102,6 +104,7 @@ const interactables: Interactable[] = [
     r: 0.85,
     seat: { x, z, y: seatY(cushionSurface) + 0.06, rot: Math.PI, pose: 'meditate' as const },
   })),
+  { id: 'offering', kind: 'offering', label: '祈福留言板', x: TEMPLE.offering.x - 1.15, z: TEMPLE.offering.z, r: 1.3, face: [TEMPLE.offering.x, TEMPLE.offering.z] },
   { id: 'temple-bell', kind: 'templeBell', label: '寺院鐘', x: TEMPLE.bell.x, z: TEMPLE.bell.z + 2, r: 1.8, face: [TEMPLE.bell.x, TEMPLE.bell.z] },
   pav.seat,
   { id: "flowers", kind: "flowers", label: "花圃", x: 2.4, z: 6.1, r: 1.6 },
@@ -125,6 +128,7 @@ const colliders: Collider[] = [
   { type: 'box', x: TEMPLE.altar.x, z: TEMPLE.altar.z, hw: 1.4, hd: 0.42 },
   { type: 'circle', x: TEMPLE.fish.x, z: TEMPLE.fish.z, r: 0.42 },
   { type: 'box', x: TEMPLE.lamps.x, z: TEMPLE.lamps.z, hw: 0.45, hd: 1.9 },
+  { type: 'box', x: TEMPLE.offering.x, z: TEMPLE.offering.z, hw: 0.45, hd: 0.75 },
   // 鐘亭與香爐
   { type: 'box', x: TEMPLE.bell.x, z: TEMPLE.bell.z, hw: 1.15, hd: 1.15 },
   { type: 'circle', x: 0, z: 0.9, r: 0.55 },

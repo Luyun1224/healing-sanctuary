@@ -2,7 +2,7 @@
  * 心靈充電所｜Healing Sanctuary — Google Apps Script 後端（Phase 2：多人同步）
  *
  * 部署方式見 docs/GAS-SETUP.md。重點：
- * - Google Sheets 只存放低頻資料（房間、主持人、祝福、公告、設定）。
+ * - Google Sheets 只存放低頻資料（房間、祈福留言、每日一句、公告、設定）。
  * - 玩家的即時狀態（位置、動作、心跳）只放 CacheService，不寫入 Sheets。
  * - 每位玩家一個快取項目（p:<房間>:<玩家>），房間名單另存一個索引（idx:<房間>），
  *   只有索引變動時才取得 LockService，避免所有玩家搶同一把鎖。
@@ -14,8 +14,7 @@
 
 var SHEETS = {
   Rooms: ['RoomID', 'Scene', 'RoomName', 'Capacity', 'Enabled', 'CreatedAt'],
-  HostApplications: ['ApplicationID', 'Nickname', 'Scene', 'RequestedDate', 'Introduction', 'Status', 'CreatedAt'],
-  HostPermissions: ['HostID', 'VerifiedIdentity', 'Scene', 'Role', 'Status', 'ApprovedAt'],
+  BlessingWall: ['MessageID', 'Scene', 'Nickname', 'Content', 'CreatedAt', 'Status'],
   DailyMessages: ['MessageID', 'Scene', 'PublishDate', 'Content', 'Author', 'Status'],
   Announcements: ['AnnouncementID', 'Scene', 'Content', 'StartAt', 'EndAt', 'Status'],
   Settings: ['Key', 'Value', 'Description', 'UpdatedAt'],
@@ -74,7 +73,7 @@ function setup() {
     settings.appendRow(['baseSyncMs', '6000', '基本輪詢間隔（毫秒），人數多時自動拉長', now]);
     settings.appendRow(['maxSyncMs', '10000', '輪詢間隔上限（毫秒）', now]);
     settings.appendRow(['interactionsEnabled', 'true', '玩家預設互動（揮手、祝福泡泡）開關', now]);
-    settings.appendRow(['blockedWords', '', '不允許出現在暱稱中的字詞（逗號分隔）', now]);
+    settings.appendRow(['blockedWords', '', '不允許出現在暱稱與留言中的字詞（逗號分隔）', now]);
   }
   return 'setup done';
 }
@@ -109,11 +108,12 @@ function respond(obj) {
 function handle(action, p, isGet) {
   try {
     // 公開讀取：GET / POST 皆可
-    if (action === 'ping') return { ok: true, service: 'healing-sanctuary', version: 3 };
+    if (action === 'ping') return { ok: true, service: 'healing-sanctuary', version: 4 };
     if (action === 'getRooms') return { ok: true, rooms: getRooms_() };
     if (action === 'getSettings') return { ok: true, settings: publicSettings_() };
     if (action === 'getDailyMessage') return { ok: true, message: getDailyMessage_(p.scene) };
     if (action === 'getAnnouncements') return { ok: true, announcements: getAnnouncements_(p.scene) };
+    if (action === 'getBlessings') return { ok: true, blessings: getBlessings_(p.scene) };
     // 寫入操作只接受 POST（GET 可能被快取、記錄在網址或被嵌入他站觸發）
     if (isGet) return { ok: false, error: 'method_not_allowed' };
     if (action === 'joinRoom') return joinRoom_(p);
@@ -121,7 +121,7 @@ function handle(action, p, isGet) {
     if (action === 'leaveRoom') return leaveRoom_(p);
     if (action === 'sendPresetInteraction') return sendPresetInteraction_(p);
     if (action === 'sendInvitation') return sendInvitation_(p);
-    if (action === 'submitHostApplication') return submitHostApplication_(p);
+    if (action === 'postBlessing') return postBlessing_(p);
     return { ok: false, error: 'unknown_action' };
   } catch (err) {
     console.error(action, err && err.stack ? err.stack : err);
@@ -378,14 +378,8 @@ function joinRoom_(p) {
   if (!room) return { ok: false, error: 'room_not_found' };
   var nickname = nickname_(p.nickname);
   if (!nickname) return { ok: false, error: 'bad_nickname' };
-  // 管理員可在 Settings 的 blockedWords 設定不適當暱稱關鍵字（逗號分隔）
-  var blocked = String(settingsMap_().blockedWords || '')
-    .split(',')
-    .map(function (w) {
-      return w.trim();
-    })
-    .filter(String);
-  if (blocked.some(function (w) { return nickname.indexOf(w) >= 0; })) return { ok: false, error: 'bad_nickname' };
+  // 管理員可在 Settings 的 blockedWords 設定不適當字詞（逗號分隔），暱稱與留言都會過濾
+  if (blocked_(nickname)) return { ok: false, error: 'bad_nickname' };
   var st = state_(p.state) || { x: 0, y: 0, z: 21, r: Math.PI, a: 'idle', e: false };
 
   // 同一分頁重新整理：持有有效 token 時沿用原本的玩家 ID
@@ -407,9 +401,7 @@ function joinRoom_(p) {
   if (!res.ok) return res;
 
   var now = Date.now();
-  var host = p.hostKey ? verifyHost_(str_(p.hostKey, 80), room.scene) : null;
-  if (p.hostKey && !host) return { ok: false, error: 'bad_host_key' };
-  var rec = { id: pid, n: nickname, av: avatar_(p.avatar), s: st, seen: now, v: 1, h: host ? host.role : '' };
+  var rec = { id: pid, n: nickname, av: avatar_(p.avatar), s: st, seen: now, v: 1 };
   cache_().put(pKey_(room.roomId, pid), JSON.stringify(rec), CFG.PLAYER_TTL_S);
   cache_().put('tok:' + pid, token, CFG.TOKEN_TTL_S);
   bumpSummary_(room.scene, res.online);
@@ -417,7 +409,6 @@ function joinRoom_(p) {
   snapshot.playerId = pid;
   snapshot.token = token;
   snapshot.room = room;
-  snapshot.hostRole = rec.h;
   return snapshot;
 }
 
@@ -455,7 +446,7 @@ function roomSnapshot_(roomId, selfId, sinceEvent) {
       return x.id !== selfId;
     })
     .map(function (x) {
-      return { id: x.id, n: x.n, av: x.av, s: x.s, seen: x.seen, v: x.v, h: x.h || '' };
+      return { id: x.id, n: x.n, av: x.av, s: x.s, seen: x.seen, v: x.v };
     });
   var online = cur.alive.length + (selfId && !cur.alive.some(function (x) { return x.id === selfId; }) ? 1 : 0);
   return { ok: true, online: online, players: others, events: readEvents_(roomId, sinceEvent), interval: syncInterval_(online) };
@@ -570,54 +561,17 @@ function bumpSummary_(scene, online) {
   cache_().put(key, JSON.stringify(s), 6 * 3600);
 }
 
-/* ============================== Phase 3：陪伴主持人 ============================== */
-
-var HOST_ROLES = ['值日陪伴員', '虛擬住持', '神父', '牧師'];
-
-function sha256Hex_(text) {
-  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8);
-  return bytes
-    .map(function (b) {
-      var v = (b < 0 ? b + 256 : b).toString(16);
-      return v.length === 1 ? '0' + v : v;
-    })
-    .join('');
-}
-
-/** 主持人金鑰的雜湊即為 HostID；試算表只保存雜湊，不保存金鑰本身 */
-function hostIdFromKey_(key) {
-  return 'h_' + sha256Hex_('healing-sanctuary:' + key).slice(0, 24);
-}
+/* ============================== 集體靜心邀請 ============================== */
 
 /**
- * 驗證主持人金鑰：HostPermissions 中狀態為 active、場景相符（或 all）。
- * 每分鐘最多 20 次錯誤嘗試，超過時暫停驗證（金鑰為隨機 UUID，本來就無法猜測）。
+ * 任何在房間內的玩家都可以邀請大家一起靜心（不需任何權限）。
+ * 每個房間每 5 分鐘最多一次；玩家可自由選擇是否參加，不會強制切換任何人的畫面或音樂。
  */
-function verifyHost_(key, scene) {
-  if (!key) return null;
-  var failKey = 'hostfail:' + Math.floor(Date.now() / 60000);
-  var fails = Number(cache_().get(failKey) || 0);
-  if (fails >= 20) return null;
-  var id = hostIdFromKey_(key);
-  var rows = readSheet_('HostPermissions').filter(function (r) {
-    return String(r.HostID) === id && String(r.Status) === 'active' && (String(r.Scene) === scene || String(r.Scene) === 'all');
-  });
-  if (!rows.length) {
-    cache_().put(failKey, String(fails + 1), 120);
-    return null;
-  }
-  var role = String(rows[0].Role);
-  return { role: HOST_ROLES.indexOf(role) >= 0 ? role : '值日陪伴員' };
-}
-
-/** 主持人發送集體靜心邀請（玩家可自由選擇是否參加；不會強制切換任何人的畫面或音樂） */
 function sendInvitation_(p) {
   var pid = checkToken_(p);
   if (!pid) return { ok: false, error: 'invalid_token' };
   var roomId = str_(p.roomId, 40);
-  var raw = cache_().get(pKey_(roomId, pid));
-  var rec = raw ? JSON.parse(raw) : null;
-  if (!rec || !rec.h) return { ok: false, error: 'not_host' };
+  if (!cache_().get(pKey_(roomId, pid))) return { ok: false, error: 'expired' };
   var minutes = [1, 3, 5].indexOf(Number(p.minutes)) >= 0 ? Number(p.minutes) : 3;
   var cdKey = 'invite:' + roomId;
   var now = Date.now();
@@ -634,27 +588,69 @@ function sendInvitation_(p) {
   });
 }
 
-/** 申請成為值日陪伴員：寫入 HostApplications（待審核）。全站每小時最多 30 筆，避免濫用 */
-function submitHostApplication_(p) {
-  var nickname = nickname_(p.nickname);
+/* ============================== 祈福留言板 ============================== */
+
+/** 防止試算表公式注入：以 =、+、-、@ 開頭的文字前面加單引號，試算表會當成純文字 */
+function sheetText_(v) {
+  return /^[=+\-@]/.test(v) ? "'" + v : v;
+}
+
+function blocked_(text) {
+  return String(settingsMap_().blockedWords || '')
+    .split(',')
+    .map(function (w) {
+      return w.trim();
+    })
+    .filter(String)
+    .some(function (w) {
+      return text.indexOf(w) >= 0;
+    });
+}
+
+/** 讀取留言板：最新 40 則（已被管理員移除的不顯示） */
+function getBlessings_(scene) {
+  if (SCENES.indexOf(String(scene)) < 0) return [];
+  return readSheet_('BlessingWall')
+    .filter(function (r) {
+      return String(r.Scene) === scene && String(r.Status) === 'published';
+    })
+    .slice(-40)
+    .reverse()
+    .map(function (r) {
+      return { id: String(r.MessageID), nickname: String(r.Nickname).slice(0, 12), content: String(r.Content).slice(0, 60), at: Number(r.CreatedAt) || 0 };
+    });
+}
+
+/**
+ * 投下祝福並留言：任何人都可以留言，不需要登入或權限。
+ * 防濫用：每位瀏覽器（clientId）每 60 秒一則、全站每分鐘最多 20 則；內容 2～60 字；過濾禁用字與 HTML。
+ */
+function postBlessing_(p) {
   var scene = SCENES.indexOf(String(p.scene)) >= 0 ? String(p.scene) : '';
-  var date = String(p.requestedDate || '');
-  var intro = str_(p.introduction, 200);
-  if (!nickname || !scene || !/^\d{4}-\d{2}-\d{2}$/.test(date) || intro.length < 5) return { ok: false, error: 'invalid' };
-  var d = new Date(date + 'T00:00:00+08:00').getTime();
-  if (!isFinite(d) || d < Date.now() - 86400000 || d > Date.now() + 90 * 86400000) return { ok: false, error: 'invalid_date' };
-  var rateKey = 'apply:' + Math.floor(Date.now() / 3600000);
-  var count = Number(cache_().get(rateKey) || 0);
-  if (count >= 30) return { ok: false, error: 'too_many', retryAfter: 3600000 };
-  cache_().put(rateKey, String(count + 1), 3700);
+  var nickname = nickname_(p.nickname) || '匿名';
+  var content = str_(p.content, 60);
+  var client = str_(p.clientId, 40);
+  if (!scene || Array.from(content).length < 2 || !client) return { ok: false, error: 'invalid' };
+  if (blocked_(content) || blocked_(nickname)) return { ok: false, error: 'blocked' };
+  var now = Date.now();
+  var cKey = 'bless:' + client;
+  if (now - Number(cache_().get(cKey) || 0) < 60000) return { ok: false, error: 'too_frequent', retryAfter: 60000 };
+  var gKey = 'blessall:' + Math.floor(now / 60000);
+  var count = Number(cache_().get(gKey) || 0);
+  if (count >= 20) return { ok: false, error: 'busy', retryAfter: 30000 };
+  cache_().put(cKey, String(now), 120);
+  cache_().put(gKey, String(count + 1), 120);
   return withLock_(function () {
-    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('HostApplications');
-    var id = 'A' + Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyMMddHHmmss') + Math.floor(Math.random() * 90 + 10);
-    // 防止試算表公式注入：以單引號開頭的文字不會被當成公式
-    var safe = function (v) {
-      return /^[=+\-@]/.test(v) ? "'" + v : v;
-    };
-    sh.appendRow([id, safe(nickname), scene, date, safe(intro), 'pending', new Date()]);
-    return { ok: true, applicationId: id };
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName('BlessingWall');
+    if (!sh) {
+      sh = ss.insertSheet('BlessingWall');
+      sh.appendRow(SHEETS.BlessingWall);
+      sh.setFrozenRows(1);
+    }
+    var id = 'B' + Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyMMddHHmmss') + Math.floor(Math.random() * 90 + 10);
+    sh.appendRow([id, scene, sheetText_(nickname), sheetText_(content), new Date(), 'published']);
+    cache_().remove('sheet:BlessingWall');
+    return { ok: true, id: id };
   });
 }

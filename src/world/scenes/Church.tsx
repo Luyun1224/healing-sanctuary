@@ -6,6 +6,7 @@ import { pavilion } from '../layouts/valley';
 import { Fauna, Pavilion, SteppingStones, StreamBench, VegetationMeshes } from '../env/Valley';
 import { Bench, Box, Cone, Cyl, GableRoof, Glow, Sphere, getGlowTexture } from '../env/prims';
 import { FadeGroup } from '../env/FadeGroup';
+import { Offering } from './Offering';
 import { stainedGlassTexture, textTexture } from '../env/textures';
 import { isDark, usePhase } from '../env/useDayPhase';
 import { useWorld, worldStore } from '../worldStore';
@@ -29,6 +30,7 @@ export function ChurchScene({ low, reduceMotion }: { low: boolean; reduceMotion:
       <Pews />
       <AltarArea />
       <CandleStand />
+      <Offering variant="church" position={[CHURCH.offering.x, FY, CHURCH.offering.z]} rotationY={Math.PI / 2 - 0.75} />
       <Piano />
       <InteriorLight />
       <BlessingBoard />
@@ -328,7 +330,7 @@ function InteriorLight() {
   );
 }
 
-/** 今日祝福看板（文字為原創祝福，Phase 3 起可由值日陪伴員發布） */
+/** 今日祝福看板（預設為原創祝福；管理員可在後台發布每日一句） */
 function BlessingBoard() {
   const { x, z } = CHURCH.board;
   const tex = useMemo(() => {

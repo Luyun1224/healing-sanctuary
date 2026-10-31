@@ -1,7 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { dailyMessage } from '../data/blessings';
 import { WISHES } from '../data/healing';
 import { useNet } from '../net/netStore';
+import { BLESSING_MAX, postBlessing, refreshBlessings, useBlessings } from '../net/blessings';
+import { loadProfile } from '../data/avatar';
+import { showToast } from '../world/worldStore';
 import type { SceneId } from '../config/scenes';
 import * as A from '../world/actions';
 import { TEMPLE_LAMP_IDS } from '../world/layouts/temple';
@@ -37,6 +40,7 @@ const HINT: Partial<Record<Interactable['kind'], string>> = {
   pond: '撒一點飼料，看錦鯉游過來。',
   wishTree: '選一句祝福，掛在祈願樹上（只存在你的畫面中）。',
   flowers: '花開得正好，蝴蝶也來了。',
+  offering: '投下一枚祝福（虛擬，不涉及金錢），寫下一段話留給大家。不需要登入。',
 };
 
 export function InteractionPanel({ scene }: { scene: SceneId }) {
@@ -53,6 +57,7 @@ export function InteractionPanel({ scene }: { scene: SceneId }) {
   const fishVol = useSettings((s) => s.fish);
   const sound = audioStore.useStore((s) => s.enabled);
   const [reading, setReading] = useState(false);
+  const [wall, setWall] = useState(false);
   const daily = useNet((s) => s.daily);
 
   if (!it) return null;
@@ -187,6 +192,9 @@ export function InteractionPanel({ scene }: { scene: SceneId }) {
         </div>
       );
       break;
+    case 'offering':
+      body = <OfferingPanel scene={scene === 'church' ? 'church' : 'temple'} key={it.id} onRead={() => setWall(true)} />;
+      break;
     case 'flowers':
       body = <Btn primary onClick={A.watchButterflies}>欣賞蝴蝶</Btn>;
       break;
@@ -204,6 +212,7 @@ export function InteractionPanel({ scene }: { scene: SceneId }) {
         <p className="mb-2 text-xs text-stone-500">{HINT[it.kind]}</p>
         {body}
       </div>
+      {wall && <WallList scene={scene === 'church' ? 'church' : 'temple'} onClose={() => setWall(false)} />}
       {reading && (
         <div className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center bg-black/25 p-6" onClick={() => setReading(false)}>
           <div className="glass max-w-sm animate-fade-up p-6 text-center" onClick={(e) => e.stopPropagation()}>
@@ -217,5 +226,99 @@ export function InteractionPanel({ scene }: { scene: SceneId }) {
         </div>
       )}
     </>
+  );
+}
+
+/** 投下祝福 → 寫下留言 */
+function OfferingPanel({ scene, onRead }: { scene: 'temple' | 'church'; onRead: () => void }) {
+  const [offered, setOffered] = useState(false);
+  const [text, setText] = useState('');
+  const [anon, setAnon] = useState(false);
+  const [sending, setSending] = useState(false);
+  const nickname = loadProfile(scene)?.nickname ?? '';
+  const count = useBlessings((s) => s.list.length);
+  if (!offered)
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Btn
+          primary
+          onClick={() => {
+            A.makeOffering();
+            setOffered(true);
+          }}
+        >
+          {scene === 'temple' ? '投下祝福・寫下祈願' : '投下祝福・寫下祝福'}
+        </Btn>
+        <Btn onClick={onRead}>看看大家的祝福{count ? `（${count}）` : ''}</Btn>
+      </div>
+    );
+  return (
+    <div className="space-y-2">
+      <textarea
+        value={text}
+        maxLength={BLESSING_MAX}
+        onChange={(e) => setText(e.target.value)}
+        className="h-16 w-full rounded-xl border border-stone-300 bg-white p-2 text-sm outline-none focus:border-forest"
+        placeholder={scene === 'temple' ? '例如：願家人平安健康，願大家今天都順順利利。' : '例如：願每一位辛苦的同事都被溫柔接住。'}
+      />
+      <p className="text-[11px] leading-relaxed text-amber-800">留言會公開給所有人看見，請勿寫下真實姓名、病人或任何個人資料。</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1 text-xs text-stone-600">
+          <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} className="accent-forest" />
+          匿名（不顯示暱稱「{nickname}」）
+        </label>
+        <span className="ml-auto text-xs text-stone-400">
+          {Array.from(text).length}/{BLESSING_MAX}
+        </span>
+      </div>
+      <div className="flex gap-2">
+        <Btn
+          primary
+          onClick={async () => {
+            if (sending || Array.from(text.trim()).length < 2) return showToast('請寫下 2～60 個字的祝福');
+            setSending(true);
+            const err = await postBlessing(scene, anon ? '匿名' : nickname, text);
+            setSending(false);
+            if (err) return showToast(err);
+            showToast('你的祝福已經貼上留言板', '謝謝你的祝福');
+            setText('');
+            setOffered(false);
+          }}
+        >
+          {sending ? '送出中…' : '貼上留言板'}
+        </Btn>
+        <Btn onClick={onRead}>看看大家的祝福</Btn>
+      </div>
+    </div>
+  );
+}
+
+function WallList({ scene, onClose }: { scene: 'temple' | 'church'; onClose: () => void }) {
+  const list = useBlessings((s) => s.list);
+  const status = useBlessings((s) => s.status);
+  useEffect(() => {
+    void refreshBlessings(scene);
+  }, [scene]);
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center bg-black/25 p-4" onClick={onClose}>
+      <div className="glass flex max-h-[80vh] w-[min(94vw,520px)] animate-fade-up flex-col p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="font-bold text-forest">{scene === 'temple' ? '祈福留言板' : '祝福留言牆'}</p>
+          <button type="button" className="text-sm text-stone-500" onClick={onClose}>
+            關閉
+          </button>
+        </div>
+        {status === 'offline' && <p className="mb-2 text-xs text-amber-700">暫時無法連線，以下為上次看到的留言。</p>}
+        <div className="grid grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+          {list.map((b, i) => (
+            <div key={b.id} className="rounded-xl p-3 text-sm shadow-sm" style={{ background: ['#fff6c8', '#ffe1e6', '#e3f1dc', '#e2ecf8'][i % 4] }}>
+              <p className="leading-relaxed">{b.content}</p>
+              <p className="mt-1 text-right text-[11px] text-stone-500">— {b.nickname}</p>
+            </div>
+          ))}
+          {!list.length && <p className="text-sm text-stone-500">{status === 'loading' ? '讀取中…' : '還沒有留言，留下第一句祝福吧。'}</p>}
+        </div>
+      </div>
+    </div>
   );
 }

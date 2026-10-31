@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { addBubble, netStore, remotes, useNet } from '../net/netStore';
+import { netStore, remotes, useNet } from '../net/netStore';
 import { Chibi, type PoseInput } from './character/Chibi';
 import { player } from './worldStore';
 
@@ -32,9 +32,6 @@ function RemoteAvatar({ id }: { id: string }) {
   const label = useRef<THREE.Group>(null);
   const pose = useRef<PoseInput>({ anim: 'idle', eyesClosed: false, strikeAt: 0, speed: 0.5, seated: null });
   const focus = useNet((s) => s.focusMode);
-  const focusRef = useRef(focus);
-  focusRef.current = focus;
-  const lastShare = useRef(-60_000);
 
   useFrame((_, rawDt) => {
     const p = remotes.get(id);
@@ -68,15 +65,6 @@ function RemoteAvatar({ id }: { id: string }) {
     pose.current.speed = walking ? 0.6 : 0;
     if (anim === 'fishDrum') pose.current.strikeAt = Math.floor(now / 1000) * 1000;
 
-    // 主持人在附近時，偶爾以對話泡泡分享今日一句（只在本機顯示）
-    if (p.role && !focusRef.current && now - lastShare.current > 90_000 && player.pos.distanceTo(p.pos) < 6) {
-      const daily = netStore.get().daily;
-      if (daily) {
-        lastShare.current = now;
-        addBubble(p.id, daily.content);
-      }
-    }
-
     // 名牌避免重疊：附近（0.9 公尺內）每多一位 ID 較小的角色，名牌就往上錯開一格
     if (label.current) {
       let rank = 0;
@@ -94,10 +82,7 @@ function RemoteAvatar({ id }: { id: string }) {
         <Html center zIndexRange={[19, 0]} pointerEvents="none">
           <div className="nameplate flex flex-col items-center">
             {!focus && <Bubble playerId={id} />}
-            <div className="rounded-full bg-white/75 px-2 py-0.5 text-[11px] font-bold text-stone-600 shadow">
-              {r.role && <span className="mr-1 rounded-full bg-honey/80 px-1.5 text-[10px] text-stone-700">{r.role}</span>}
-              {r.nickname}
-            </div>
+            <div className="rounded-full bg-white/75 px-2 py-0.5 text-[11px] font-bold text-stone-600 shadow">{r.nickname}</div>
           </div>
         </Html>
       </group>

@@ -20,7 +20,7 @@ export const CANDLE_BLESSINGS = [
   '願今天的你，被愛、也懂得愛自己。',
 ];
 
-/** 今日祝福：依日期輪替（Phase 3 起可由值日陪伴員在後台發布，取代此預設內容） */
+/** 今日祝福：依日期輪替（管理員在後台發布的每日一句會取代此預設內容） */
 export const DAILY_MESSAGES: Record<'temple' | 'church' | 'neutral', string[]> = {
   temple: [
     '今天辛苦了，願你的心比昨天輕一點。',

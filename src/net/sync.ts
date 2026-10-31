@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { SceneId } from '../config/scenes';
 import type { PlayerProfile } from '../data/avatar';
 import type { Anim } from '../world/types';
-import { player, playGesture, showToast, worldStore } from '../world/worldStore';
+import { player, playGesture, worldStore } from '../world/worldStore';
 import { beaconGas, callGas, GAS_URL } from './api';
 import { addBubble, netStore, remotes, type RemotePlayer } from './netStore';
 import { INTERACT_COOLDOWN_MS, presetById, type PresetId } from './presets';
@@ -24,7 +24,6 @@ interface WireState {
   q: '' | 's' | 'm';
 }
 interface WirePlayer {
-  h?: string;
   id: string;
   n: string;
   av: RemotePlayer['avatar'];
@@ -55,7 +54,6 @@ interface Room {
 }
 
 const HEARTBEAT_MS = 25_000;
-export const hostKeyName = (scene: SceneId | null) => `healing-sanctuary:hostKey:${scene}`;
 const MAX_BACKOFF_MS = 60_000;
 
 function localState(): WireState {
@@ -125,7 +123,7 @@ class SyncClient {
     this.token = '';
     this.playerId = '';
     remotes.clear();
-    netStore.set({ ids: [], online: 0, bubbles: [], selfId: '', hostRole: '', invite: null });
+    netStore.set({ ids: [], online: 0, bubbles: [], selfId: '', invite: null });
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('pagehide', this.onPageHide);
   }
@@ -182,21 +180,13 @@ class SyncClient {
     let lastError = 'room_full';
     for (const room of candidates) {
       const resume = saved && saved.roomId === room.roomId ? { playerId: saved.playerId, token: saved.token } : {};
-      const hostKey = sessionStorage.getItem(hostKeyName(this.scene)) || undefined;
-      const res = await callGas<Snapshot & { playerId: string; token: string; room: Room; hostRole?: string }>('joinRoom', {
+      const res = await callGas<Snapshot & { playerId: string; token: string; room: Room }>('joinRoom', {
         roomId: room.roomId,
         nickname: this.profile.nickname,
         avatar: this.profile.avatar,
         state: localState(),
-        hostKey,
         ...resume,
       });
-      if (!res.ok && res.error === 'bad_host_key') {
-        // 金鑰錯誤或已被停用：移除後以一般身分重新加入
-        sessionStorage.removeItem(hostKeyName(this.scene));
-        showToast('主持人金鑰無效或已停用，已改以一般身分進入');
-        return this.join();
-      }
       if (gen !== this.gen) {
         // 已離開場景：把剛建立的玩家移除，避免留下分身
         if (res.ok) void callGas('leaveRoom', { roomId: res.room.roomId, playerId: res.playerId, token: res.token }, 5000);
@@ -209,8 +199,7 @@ class SyncClient {
         this.failures = 0;
         this.lastHb = Date.now();
         sessionStorage.setItem(this.sessionKey(), JSON.stringify({ roomId: room.roomId, playerId: res.playerId, token: res.token }));
-        netStore.set({ roomName: res.room.name, selfId: res.playerId, hostRole: res.hostRole || '' });
-        if (hostKey && res.hostRole) showToast(`今天由你擔任${res.hostRole}，謝謝你的陪伴`, '主持人已登入');
+        netStore.set({ roomName: res.room.name, selfId: res.playerId });
         void this.loadContent();
         // 加入前的舊事件不顯示
         this.sinceEvent = res.events.reduce((m, e) => Math.max(m, e.seq), 0);
@@ -285,7 +274,6 @@ class SyncClient {
           anim: p.s.a,
           eyesClosed: p.s.e,
           seated: p.s.q,
-          role: p.h || '',
           receivedAt: now,
           version: p.v,
           gesture: null,
@@ -295,7 +283,6 @@ class SyncClient {
       }
       r.nickname = p.n;
       r.avatar = p.av;
-      r.role = p.h || '';
       if (p.v !== r.version) {
         r.version = p.v;
         r.target.set(p.s.x, p.s.y, p.s.z);
@@ -324,8 +311,8 @@ class SyncClient {
         this.sinceEvent = Math.max(this.sinceEvent, e.seq);
         if (e.from === this.playerId) continue;
         if (e.preset === 'invite') {
-          const host = remotes.get(e.from);
-          if (!netStore.get().focusMode) netStore.set({ invite: { id: e.seq, nickname: host?.nickname ?? '值日陪伴員', role: host?.role || '值日陪伴員', minutes: e.minutes ?? 3, startAt: e.startAt ?? Date.now() } });
+          const who = remotes.get(e.from);
+          if (!netStore.get().focusMode) netStore.set({ invite: { id: e.seq, nickname: who?.nickname ?? '一位同事', minutes: e.minutes ?? 3, startAt: e.startAt ?? Date.now() } });
           continue;
         }
         const preset = presetById(e.preset);
@@ -347,18 +334,12 @@ class SyncClient {
     netStore.set({ daily: d.ok ? d.message : null, announcements: a.ok ? a.announcements : [] });
   }
 
-  /** 主持人：重新以主持人身分加入（金鑰只存在此分頁的 sessionStorage） */
-  restart() {
-    if (this.scene && this.profile) this.start(this.scene, this.profile);
-  }
-
-  /** 主持人：發送集體靜心邀請 */
+  /** 邀請同房間的人一起靜心（任何人都可以發送，每個房間每 5 分鐘一次） */
   async invite(minutes: number): Promise<string | null> {
     if (!this.room) return '目前未連線';
     const res = await callGas('sendInvitation', { roomId: this.room.roomId, playerId: this.playerId, token: this.token, minutes });
     if (res.ok) return null;
     if (res.error === 'cooldown') return '5 分鐘內只能發送一次邀請';
-    if (res.error === 'not_host') return '只有主持人可以發送邀請';
     return '暫時無法發送，請稍後再試';
   }
 

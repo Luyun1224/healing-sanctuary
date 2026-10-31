@@ -1,5 +1,5 @@
 /**
- * Phase 3＋4 瀏覽器驗收測試（Playwright）
+ * 療癒功能、祈福留言板、每日一句與集體靜心邀請的瀏覽器驗收測試（Playwright）
  * 先啟動：node tools/gas-emulator.mjs --latency 300
  *        VITE_GAS_URL=http://localhost:8787/exec npm run dev
  * 再執行：SHOTS=/tmp node tools/e2e-phase34.cjs
@@ -119,52 +119,61 @@ const ws = (page, fn) => page.evaluate(`(${fn})(window.__hs.worldStore.get())`);
   await pa.keyboard.up('s');
   ok('沿著小徑散步：按方向鍵即停止', !(await ws(pa, (s) => s.walking)));
 
-  // ---------- Phase 3：值日陪伴員 ----------
-  await pa.click('button[aria-label="療癒小角落"]');
-  await pa.click('button:has-text("申請成為值日陪伴員")');
-  await pa.fill('textarea', '我是護理站的小雲，想陪大家休息');
-  await pa.click('button:has-text("送出申請")');
-  await pa.waitForSelector('text=申請已送出', { timeout: 15000 });
-  const dash = await admin('getDashboard');
-  const app = dash.result.applications.find((a) => a.Nickname === '小雲');
-  ok('申請：寫入 HostApplications', !!app && app.Status === 'pending');
-  await pa.click('button:has-text("關閉")');
-  const approved = await admin('approveHost', app.ApplicationID, '值日陪伴員', 'nurse@hospital.test', false);
-  ok('管理員核准並取得金鑰', approved.ok && approved.result.hostKey.length === 36);
-  await admin('publishDailyMessage', 'all', new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date()), '今天辛苦了，願你的心比昨天輕一點。', '值日陪伴員 小雲');
+  // ---------- 祈福留言板（不需任何權限） ----------
+  await tp(pa, 4.2, -5.1);
+  await pa.waitForTimeout(1000);
+  await pa.click('button:has-text("投下祝福")');
+  await pa.waitForTimeout(250);
+  await pa.screenshot({ path: `${shots}/wall-coin.png` });
+  ok('投下祝福：觸發錢幣動畫', await ws(pa, (s) => s.offeringAt > 0));
+  await pa.fill('textarea', '願每一位辛苦的同事今天都平安順利');
+  await pa.click('button:has-text("貼上留言板")');
+  await pa.waitForSelector('text=你的祝福已經貼上留言板', { timeout: 20000 }).catch(() => {});
+  ok('留言：送出成功（不需登入）', (await pa.locator('text=你的祝福已經貼上留言板').count()) > 0);
+  await pa.waitForTimeout(1500);
+  await pa.screenshot({ path: `${shots}/wall-board.png` });
+  ok('留言：不需任何金鑰或主持人介面', (await pa.locator('text=/主持人|金鑰|值日/').count()) === 0);
+
+  const pb = B.page;
+  await tp(pb, 4.2, -5.1);
+  await pb.waitForTimeout(1000);
+  await pb.click('button:has-text("看看大家的祝福")');
+  await pb.waitForSelector('text=願每一位辛苦的同事今天都平安順利', { timeout: 20000 }).catch(() => {});
+  ok('另一位玩家看得到這則留言（附暱稱）', (await pb.locator('text=願每一位辛苦的同事今天都平安順利').count()) > 0 && (await pb.locator('text=— 小雲').count()) > 0);
+  await pb.screenshot({ path: `${shots}/wall-list.png` });
+  await pb.click('button:has-text("關閉")');
+  await pb.click('button:has-text("投下祝福")');
+  await pb.fill('textarea', '希望大家睡個好覺');
+  await pb.check('input[type=checkbox]');
+  await pb.click('button:has-text("貼上留言板")');
+  await pb.waitForTimeout(3000);
+  const wall = await (await fetch(`${emu}/exec?action=getBlessings&scene=temple`)).json();
+  ok('匿名留言：伺服器上顯示為「匿名」', wall.blessings.some((b) => b.content === '希望大家睡個好覺' && b.nickname === '匿名'));
+  await pb.click('button:has-text("投下祝福")');
+  await pb.fill('textarea', '再留一則');
+  await pb.click('button:has-text("貼上留言板")');
+  ok('防洗版：一分鐘內第二則被婉拒', !!(await pb.waitForSelector('text=每分鐘可以留一則祝福', { timeout: 15000 }).catch(() => null)));
+
+  // ---------- 每日一句與公告（管理員後台發布） ----------
+  await admin('publishDailyMessage', 'all', new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date()), '今天辛苦了，願你的心比昨天輕一點。', '心靈充電所');
   await admin('publishAnnouncement', 'temple', '週五 12:30 一起三分鐘靜心', null, null);
+  await pb.reload();
+  await pb.waitForFunction(() => window.__net && window.__net.netStore.get().daily, null, { timeout: 70000 }).catch(() => {});
+  ok('每日一句：顯示後台發布的內容', (await pb.locator('text=今天辛苦了，願你的心比昨天輕一點。').count()) > 0);
+  ok('公告：顯示在右下角', (await pb.locator('text=週五 12:30 一起三分鐘靜心').count()) > 0);
 
+  // ---------- 集體靜心邀請（任何人都可以） ----------
+  await pb.waitForFunction(() => window.__net.netStore.get().status === 'online' && window.__net.netStore.get().ids.length > 0, null, { timeout: 30000 });
   await pa.click('button[aria-label="療癒小角落"]');
-  await pa.click('button:has-text("主持人登入")');
-  await pa.fill('input[placeholder^="xxxx"]', approved.result.hostKey);
-  await pa.click('button:has-text("登入")');
-  await pa.waitForFunction(() => window.__net.netStore.get().hostRole === '值日陪伴員', null, { timeout: 30000 }).catch(() => {});
-  ok('主持人登入：取得值日陪伴員身分', (await pa.evaluate(() => window.__net.netStore.get().hostRole)) === '值日陪伴員');
-  ok('主持人登入：金鑰只存在 sessionStorage', !(await pa.evaluate(() => JSON.stringify(localStorage))).includes(approved.result.hostKey));
-
-  // B 看見主持人身分、每日一句與公告（公開快取最多 60 秒）
-  await B.page.waitForFunction(() => [...window.__net.remotes.values()].some((r) => r.role === '值日陪伴員'), null, { timeout: 30000 }).catch(() => {});
-  ok('其他人看見主持人名牌', await B.page.evaluate(() => [...window.__net.remotes.values()].some((r) => r.role === '值日陪伴員')));
-  await B.page.reload();
-  await B.page.waitForFunction(() => window.__net && window.__net.netStore.get().daily, null, { timeout: 70000 }).catch(() => {});
-  ok('每日一句：顯示主持人發布的內容', (await B.page.locator('text=今天辛苦了，願你的心比昨天輕一點。').count()) > 0);
-  ok('主持人公告：顯示在右下角', (await B.page.locator('text=週五 12:30 一起三分鐘靜心').count()) > 0);
-
-  // 集體靜心邀請
-  await B.page.waitForFunction(() => window.__net.netStore.get().status === 'online' && window.__net.netStore.get().ids.length > 0, null, { timeout: 30000 });
-  await pa.click('button[aria-label="療癒小角落"]');
-  await pa.click('button:has-text("主持人工具")');
+  await pa.click('button:has-text("邀請大家一起靜心")');
   await pa.click('button:has-text("3 分鐘")');
-  await B.page.waitForSelector('text=3 分鐘靜心即將開始', { timeout: 30000 }).catch(() => {});
-  ok('其他人收到集體靜心邀請（可自由選擇）', (await B.page.locator('text=這次先不用').count()) > 0);
-  await B.page.screenshot({ path: `${shots}/p3-invite.png` });
-  await B.page.click('button:has-text("一起參加")');
-  await B.page.waitForTimeout(1500);
-  ok('參加後顯示呼吸圓環（等待開始倒數）', (await B.page.locator('text=/秒後開始|吸氣/').count()) > 0);
-  await B.page.screenshot({ path: `${shots}/p3-joined.png` });
+  await pb.waitForSelector('text=3 分鐘靜心即將開始', { timeout: 30000 }).catch(() => {});
+  ok('一般玩家發出的邀請，其他人收到（可自由選擇）', (await pb.locator('text=這次先不用').count()) > 0 && (await pb.locator('text=小雲 邀請你').count()) > 0);
+  await pb.screenshot({ path: `${shots}/invite.png` });
+  await pb.click('button:has-text("一起參加")');
+  await pb.waitForTimeout(1500);
+  ok('參加後顯示呼吸圓環（等待開始倒數）', (await pb.locator('text=/秒後開始|吸氣/').count()) > 0);
 
-  // 停用後失效
-  await admin('disableHost', approved.result.hostId);
   console.log(`\n${pass} passed, ${fail} failed`);
   await browser.close();
   process.exit(fail ? 1 : 0);

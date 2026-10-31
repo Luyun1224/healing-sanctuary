@@ -159,7 +159,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ ...stats, keys: store.size }));
     return;
   }
-  // 僅限本機模擬器：以管理員身分呼叫 gas/admin/Admin.gs 的函式（例如 /__admin?fn=approveHost&args=[...]）
+  // 僅限本機模擬器：以管理員身分呼叫 gas/admin/Admin.gs 的函式（例如 /__admin?fn=removeContent&args=[...]）
   if (url.pathname === '/__admin') {
     adminBox ??= createSandbox(path.join(here, '../gas/admin/Admin.gs'), { session: 'admin@local.test', props: new Map([['ADMIN_EMAILS', 'admin@local.test'], ['SPREADSHEET_ID', 'local']]) });
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });

@@ -951,6 +951,18 @@ class AudioEngine {
     src.stop(t + 0.45);
   }
 
+  /** 投下祝福：錢幣落入木箱的清脆聲，接著一聲柔和鈴音 */
+  playCoin() {
+    const ctx = this.ctx;
+    if (!ctx || !this.enabled) return;
+    const t = ctx.currentTime + 0.45;
+    [0, 0.09, 0.15].forEach((d, i) => {
+      for (const f of [3100, 4650, 6900]) this.tone(f * (1 - i * 0.03), t + d, { peak: 0.03 / (i + 1), attack: 0.001, decay: 0.12, out: this.sfx });
+    });
+    this.fishAt(t + 0.22, this.sfx, 0.25);
+    window.setTimeout(() => this.playChime(), 700);
+  }
+
   /** 點燈、點蠟燭的柔和鈴音 */
   playChime() {
     const ctx = this.ctx;

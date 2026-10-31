@@ -47,6 +47,8 @@ export interface WorldState {
   leaves: { id: number; text: string; at: number }[];
   walking: boolean;
   walkIdx: number;
+  /** 投下祝福（虛擬，不涉及金錢）的時間，用於錢幣動畫 */
+  offeringAt: number;
 }
 
 const counts = load('counts', { fish: 0 });
@@ -76,6 +78,7 @@ export const worldStore = createStore<WorldState>({
   leaves: [],
   walking: false,
   walkIdx: 0,
+  offeringAt: 0,
 });
 export const useWorld = worldStore.useStore;
 

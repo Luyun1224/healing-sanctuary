@@ -6,6 +6,7 @@ import { pavilion } from '../layouts/valley';
 import { Fauna, Pavilion, SteppingStones, StreamBench, VegetationMeshes } from '../env/Valley';
 import { Ball, Box, Cone, Cyl, Glow, HipRoof, Sphere, getGlowTexture } from '../env/prims';
 import { FadeGroup } from '../env/FadeGroup';
+import { Offering } from './Offering';
 import { latticeTexture, textTexture } from '../env/textures';
 import { isDark, usePhase } from '../env/useDayPhase';
 import { useWorld, worldStore } from '../worldStore';
@@ -32,6 +33,7 @@ export function TempleScene({ low, reduceMotion }: { low: boolean; reduceMotion:
         <Cushion key={i} x={x} z={z} />
       ))}
       <PeaceLamps />
+      <Offering variant="temple" position={[TEMPLE.offering.x, FY, TEMPLE.offering.z]} rotationY={-Math.PI / 2 + 0.75} />
       <InteriorLight />
       <BellPavilion />
       <Courtyard />

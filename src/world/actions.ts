@@ -179,3 +179,13 @@ export function startWalk() {
 export function stopWalk() {
   worldStore.set({ walking: false, moveTarget: null });
 }
+
+/** 投下祝福：象徵性的虛擬錢幣（不涉及任何真實金錢），之後可以留下一段祝福 */
+export function makeOffering() {
+  const s = worldStore.get();
+  faceTo(s.nearby);
+  if (performance.now() - s.offeringAt < 1500) return;
+  worldStore.set({ offeringAt: performance.now() });
+  playGesture(s.scene === 'temple' ? 'handsTogether' : 'pray');
+  audio.playCoin();
+}

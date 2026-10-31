@@ -1,5 +1,6 @@
 /**
  * 心靈充電所｜管理後台（獨立的 Apps Script 專案，部署方式見 docs/ADMIN-GUIDE.md）
+ * 用途：管理祈福留言板、每日一句、公告、功能開關與房間。玩家端不需要任何權限或金鑰。
  *
  * 授權（全部在伺服器端確認，前端沒有任何密碼）：
  * 1. 部署設定「執行身分：存取網頁應用程式的使用者」＋「存取權：擁有 Google 帳戶的任何使用者（或機構網域）」，
@@ -8,8 +9,6 @@
  * 指令碼屬性：SPREADSHEET_ID（資料庫試算表 ID）、ADMIN_EMAILS。
  */
 
-var ROLES = ['值日陪伴員', '虛擬住持', '神父', '牧師'];
-var FORMAL = ['虛擬住持', '神父', '牧師'];
 var SCENES = ['temple', 'church', 'all'];
 var SETTING_KEYS = {
   multiplayerEnabled: 'bool',
@@ -103,79 +102,12 @@ function withLock_(fn) {
 function getDashboard() {
   requireAdmin_();
   return {
-    applications: rows_('HostApplications').reverse().slice(0, 100),
-    hosts: rows_('HostPermissions').reverse(),
+    blessings: rows_('BlessingWall').reverse().slice(0, 150),
     dailyMessages: rows_('DailyMessages').reverse().slice(0, 40),
     announcements: rows_('Announcements').reverse().slice(0, 40),
     settings: rows_('Settings'),
     rooms: rows_('Rooms'),
   };
-}
-
-function getApplications() {
-  requireAdmin_();
-  return rows_('HostApplications').reverse();
-}
-
-/* ============================== 主持人審核 ============================== */
-
-function sha256Hex_(text) {
-  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8)
-    .map(function (b) {
-      var v = (b < 0 ? b + 256 : b).toString(16);
-      return v.length === 1 ? '0' + v : v;
-    })
-    .join('');
-}
-
-/**
- * 核准申請：產生一次性顯示的主持人金鑰（只回傳給管理員一次，試算表只存雜湊）。
- * 正式宗教職稱（住持、神父、牧師）必須由管理員勾選「已確認具正式身分或授權」。
- */
-function approveHost(applicationId, role, verifiedIdentity, formalConfirmed) {
-  var email = requireAdmin_();
-  if (ROLES.indexOf(role) < 0) throw new Error('角色不正確');
-  if (FORMAL.indexOf(role) >= 0 && formalConfirmed !== true) throw new Error('正式宗教職稱需確認具正式身分或授權；一般同事請使用「值日陪伴員」');
-  return withLock_(function () {
-    var app = rows_('HostApplications').filter(function (r) {
-      return String(r.ApplicationID) === String(applicationId);
-    })[0];
-    if (!app) throw new Error('找不到申請');
-    if (String(app.Status) !== 'pending') throw new Error('此申請已處理過');
-    var key = Utilities.getUuid();
-    var hostId = 'h_' + sha256Hex_('healing-sanctuary:' + key).slice(0, 24);
-    ss_().getSheetByName('HostPermissions').appendRow([hostId, clean_(verifiedIdentity || email + ' 核准', 120), app.Scene, role, 'active', new Date()]);
-    setCell_('HostApplications', app._row, 'Status', 'approved');
-    log_(email, 'approveHost', applicationId + ' → ' + hostId + ' ' + role);
-    return { hostId: hostId, hostKey: key, nickname: app.Nickname, scene: app.Scene, role: role };
-  });
-}
-
-function rejectHost(applicationId) {
-  var email = requireAdmin_();
-  return withLock_(function () {
-    var app = rows_('HostApplications').filter(function (r) {
-      return String(r.ApplicationID) === String(applicationId);
-    })[0];
-    if (!app) throw new Error('找不到申請');
-    setCell_('HostApplications', app._row, 'Status', 'rejected');
-    log_(email, 'rejectHost', applicationId);
-    return true;
-  });
-}
-
-/** 停用主持人資格（立即生效於下一次加入房間；公開 API 快取約 60 秒） */
-function disableHost(hostId) {
-  var email = requireAdmin_();
-  return withLock_(function () {
-    var h = rows_('HostPermissions').filter(function (r) {
-      return String(r.HostID) === String(hostId);
-    })[0];
-    if (!h) throw new Error('找不到主持人');
-    setCell_('HostPermissions', h._row, 'Status', 'disabled');
-    log_(email, 'disableHost', hostId);
-    return true;
-  });
 }
 
 /* ============================== 每日一句與公告 ============================== */
@@ -210,10 +142,10 @@ function publishAnnouncement(scene, content, startAt, endAt) {
   });
 }
 
-/** 移除不適當內容（每日一句或公告）：狀態改為 removed，保留紀錄 */
+/** 移除不適當內容（祈福留言、每日一句或公告）：狀態改為 removed，保留紀錄 */
 function removeContent(sheetName, id) {
   var email = requireAdmin_();
-  var idCol = { DailyMessages: 'MessageID', Announcements: 'AnnouncementID' }[sheetName];
+  var idCol = { BlessingWall: 'MessageID', DailyMessages: 'MessageID', Announcements: 'AnnouncementID' }[sheetName];
   if (!idCol) throw new Error('不支援的工作表');
   return withLock_(function () {
     var r = rows_(sheetName).filter(function (x) {
