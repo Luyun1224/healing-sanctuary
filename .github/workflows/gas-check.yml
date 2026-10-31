@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       clients:
-        description: '模擬人數（0 = 只做連線檢查）'
+        description: '模擬人數，可用逗號依序測試多組，例如 5,10,25（0 = 只做連線檢查）'
         default: '0'
       duration:
         description: '負載測試秒數'
@@ -37,7 +37,8 @@ jobs:
           echo "== GET getRooms =="
           curl -sSL -m 30 "$URL?action=getRooms"; echo
           echo "== POST text/plain getSettings (browser-like, Origin set) =="
-          curl -sSL -m 30 -D /tmp/h -X POST -H 'Content-Type: text/plain;charset=utf-8' -H 'Origin: https://luyun1224.github.io' -d '{"action":"getSettings"}' "$URL"; echo
+          # 不加 -X POST：與瀏覽器相同，302 轉址後改用 GET 讀取結果
+          curl -sSL -m 30 -D /tmp/h -H 'Content-Type: text/plain;charset=utf-8' -H 'Origin: https://luyun1224.github.io' --data '{"action":"getSettings"}' "$URL"; echo
           echo "== response headers (redirect chain) =="
           grep -iE '^(HTTP|location|access-control-allow-origin|content-type)' /tmp/h | sed -E 's#(macros/s/|user_content_key=)[^/&]+#\1***#g'
           echo "== write via GET must be rejected =="
@@ -46,4 +47,9 @@ jobs:
         if: ${{ inputs.clients != '0' }}
         env:
           URL: ${{ steps.url.outputs.url }}
-        run: node tools/load-test.mjs --url "$URL" --clients ${{ inputs.clients }} --duration ${{ inputs.duration }}
+        run: |
+          for n in $(echo "${{ inputs.clients }}" | tr ',' ' '); do
+            echo "===== $n clients ====="
+            node tools/load-test.mjs --url "$URL" --clients "$n" --duration ${{ inputs.duration }} --room temple-1
+            sleep 20
+          done
