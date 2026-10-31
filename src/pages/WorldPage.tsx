@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SCENES, type SceneId } from '../config/scenes';
 import { loadProfile } from '../data/avatar';
 import { dailyMessage } from '../data/blessings';
@@ -6,7 +6,7 @@ import { load, save } from '../lib/storage';
 import { PHASE_LABEL } from '../lib/timeOfDay';
 import { navigate } from '../router';
 import { ActionBar } from '../ui/ActionBar';
-import { toggleSound, useAudioDirector } from '../ui/audioHooks';
+import { toggleSound, useAudioDirector, useAutoResumeSound } from '../ui/audioHooks';
 import { InteractionPanel } from '../ui/InteractionPanel';
 import { Joystick } from '../ui/Joystick';
 import { MeditationTimer } from '../ui/MeditationTimer';
@@ -22,7 +22,7 @@ import { WorldCanvas } from '../world/WorldCanvas';
 import { useNet } from '../net/netStore';
 import { sync } from '../net/sync';
 import { Greetings } from '../ui/Greetings';
-import { resetWorld, useWorld, worldStore } from '../world/worldStore';
+import { resetWorld, showToast, useWorld, worldStore } from '../world/worldStore';
 
 type Panel = 'sound' | 'display' | 'help' | null;
 
@@ -49,6 +49,19 @@ export default function WorldPage({ scene }: { scene: Exclude<SceneId, 'taoist'>
 
   useKeyboard();
   useAudioDirector(phase);
+  useAutoResumeSound();
+
+  // 走進建築但聲音關閉時，溫和提示一次
+  const inside = useWorld((s) => s.inside);
+  const hinted = useRef(false);
+  useEffect(() => {
+    if (!inside || hinted.current || audioStore.get().enabled) return;
+    hinted.current = true;
+    showToast(
+      scene === 'temple' ? '點右上角「開啟聲音」，聆聽佛堂的誦唱、木魚與頌缽' : '點右上角「開啟聲音」，聆聽教堂的詩班與琴聲',
+      '聲音目前關閉',
+    );
+  }, [inside, scene]);
 
   useEffect(() => {
     resetWorld(scene);

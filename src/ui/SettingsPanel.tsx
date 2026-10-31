@@ -3,6 +3,7 @@ import { settingsStore, useSettings, type Settings } from '../world/settings';
 import { useWorld, worldStore } from '../world/worldStore';
 import type { SceneId } from '../config/scenes';
 import { useEffect, useState } from 'react';
+import { load, save } from '../lib/storage';
 import { audio, type InteriorSource } from '../audio/engine';
 
 function useInteriorSource(scene: 'temple' | 'church') {
@@ -43,7 +44,7 @@ function Toggle({ label, value, onChange, hint }: { label: string; value: boolea
 export function SoundPanel({ scene }: { scene: SceneId }) {
   const s = useSettings((x) => x);
   const track = useWorld((x) => x.track);
-  const sceneTrack = scene === 'temple' ? 'zen' : 'piano';
+  const sceneTrack = scene === 'temple' ? 'zen' : 'garden';
   const interiorSrc = useInteriorSource(scene === 'church' ? 'church' : 'temple');
   return (
     <div className="space-y-2">
@@ -54,12 +55,20 @@ export function SoundPanel({ scene }: { scene: SceneId }) {
       <Slider label="互動音效" k="sfx" />
       {scene === 'temple' && <Slider label="木魚音量" k="fish" />}
       <Toggle
-        label={scene === 'temple' ? '進入佛堂播放誦唱與鐘聲' : '進入教堂播放詩班與鐘聲'}
+        label={scene === 'temple' ? '進入佛堂自動播放誦唱、木魚與頌缽' : '進入教堂自動播放詩班、琴聲與鐘聲'}
         hint={interiorSrc === 'recording' ? '目前播放授權錄音' : '目前為合成氛圍音（只有母音，非真實經文或聖詩錄音）'}
         value={s.interior}
         onChange={(v) => settingsStore.set({ interior: v })}
       />
-      <Toggle label="戶外背景器樂" hint="原創合成器樂，可隨時關閉" value={!!track} onChange={(v) => worldStore.set({ track: v ? sceneTrack : null })} />
+      <Toggle
+        label="戶外冥想音樂"
+        hint="空靈長音與鐘片聲（原創），進入室內時自動淡出"
+        value={track === sceneTrack}
+        onChange={(v) => {
+          save('ui', { ...load('ui', {}), outdoorMusic: v });
+          worldStore.set({ track: v ? sceneTrack : null });
+        }}
+      />
       <Toggle label="只聽自然音" hint="關閉音樂、室內誦唱與互動音效；室內也保留蟲鳴鳥叫" value={s.natureOnly} onChange={(v) => settingsStore.set({ natureOnly: v })} />
       <Toggle label="細雨聲" value={s.rain} onChange={(v) => settingsStore.set({ rain: v })} />
     </div>

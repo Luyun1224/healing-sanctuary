@@ -2,7 +2,8 @@
  * 心靈充電所音效引擎（Web Audio API 即時合成，參考 OSCE Island 的合成音樂架構）
  *
  * - 預設所有聲音皆為程式即時合成的原創音效／器樂。
- * - 室內氛圍：佛堂為「合成誦唱氛圍音＋木魚＋引磬＋鐘聲」，教堂為「合成詩班和聲＋管風琴＋鐘聲」。
+ * - 室內氛圍（以冥想、放鬆為主，明亮不低沉）：佛堂為「輕柔誦唱＋木魚＋頌缽＋引磬＋偶爾鐘聲＋長音」，
+ *   教堂為「詩班和聲＋長笛管風琴＋豎琴分解和弦＋偶爾鐘聲」；戶外有冥想音樂（長音＋鐘片），進入室內淡出。
  *   合成人聲只有母音、沒有經文或歌詞，介面上標示為合成氛圍音，不冒充真實誦經或聖詩錄音。
  *   若在 public/audio/ 放入經授權的錄音（temple-chant.mp3、church-hymn.mp3），會自動改播錄音（見 docs/ASSETS.md）。
  * - 區域：戶外播放蟲鳴鳥叫；進入佛堂／教堂後戶外聲淡出、室內氛圍淡入；在門口附近可隱約聽見室內聲音。
@@ -12,7 +13,8 @@
 import type { DayPhase } from '../lib/timeOfDay';
 import type { Settings } from '../world/settings';
 
-export type Track = 'zen' | 'piano' | 'organ';
+/** zen／garden 為戶外冥想音樂（進入室內時淡出）；piano／organ 為教堂鋼琴角落點播 */
+export type Track = 'zen' | 'garden' | 'piano' | 'organ';
 export type Zone = 'outdoor' | 'temple' | 'church';
 export type InteriorSource = 'none' | 'recording' | 'synth';
 
@@ -64,7 +66,18 @@ class AudioEngine {
   private interiorZone!: GainNode;
   private interiorVerbIn!: GainNode;
   /** 合成人聲（共用的共振峰濾波鏈） */
-  private voice: { oscs: OscillatorNode[]; f1: BiquadFilterNode; f2: BiquadFilterNode; f3: BiquadFilterNode; env: GainNode; scene: 'temple' | 'church' } | null = null;
+  private voice: {
+    oscs: OscillatorNode[];
+    /** 每個聲部相對主旋律的半音偏移（佛堂加一個高八度的輕聲部） */
+    offsets: number[];
+    f1: BiquadFilterNode;
+    f2: BiquadFilterNode;
+    f3: BiquadFilterNode;
+    env: GainNode;
+    scene: 'temple' | 'church';
+    extras: AudioScheduledSourceNode[];
+    padGain: GainNode;
+  } | null = null;
   private zone: Zone = 'outdoor';
   private zoneScene: 'temple' | 'church' = 'temple';
   private near = 0;
@@ -77,6 +90,8 @@ class AudioEngine {
   private crickets = [0, 0, 0, 0];
   onInteriorSource: ((scene: 'temple' | 'church', src: InteriorSource) => void) | null = null;
   private music!: GainNode;
+  /** 戶外冥想音樂：與戶外自然音一起隨區域淡入淡出 */
+  private musicOutdoor!: GainNode;
   private sfx!: GainNode;
   private fish!: GainNode;
   private reverb!: ConvolverNode;
@@ -151,8 +166,12 @@ class AudioEngine {
     this.interiorUser = bus();
     this.interiorZone = ctx.createGain();
     this.interiorZone.gain.value = 0;
-    this.interiorZone.connect(this.interiorUser);
+    // 去除低頻轟鳴，讓室內聲音明亮、輕盈
+    const lowCut = this.biquad('highpass', 160, 0.6);
+    this.interiorZone.connect(lowCut).connect(this.interiorUser);
     this.music = bus();
+    this.musicOutdoor = ctx.createGain();
+    this.musicOutdoor.connect(this.music);
     this.sfx = bus();
     this.fish = ctx.createGain();
     this.fish.connect(this.sfx);
@@ -280,6 +299,7 @@ class AudioEngine {
     const inside = this.zone !== 'outdoor';
     const keepNature = this.settings.natureOnly || !this.settings.interior;
     this.outdoor.gain.setTargetAtTime(inside && !keepNature ? 0 : 1, t, 0.7);
+    this.musicOutdoor.gain.setTargetAtTime(inside ? 0 : 1, t, 0.7);
     this.interiorZone.gain.setTargetAtTime(inside ? 1 : this.near * 0.22, t, 0.7);
   }
 
@@ -452,21 +472,52 @@ class AudioEngine {
   }
 
   /** 回傳此步驟長度（秒） */
+  /** 柔和的鐘片／頌缽般音色（正弦＋少量泛音，長尾音） */
+  private chime(f: number, t: number, peak: number, out: AudioNode, verb: AudioNode, decay = 3.5) {
+    for (const [h, a, d] of [
+      [1, 1, decay],
+      [2.0, 0.18, decay * 0.5],
+      [3.01, 0.07, decay * 0.3],
+    ] as const) {
+      const p = this.tone(f * h, t, { peak: peak * a, attack: 0.01, decay: d, out });
+      p.g.connect(verb);
+    }
+  }
+
+  /** 空靈的長音背景（緩慢起伏的和弦） */
+  private pad(notes: number[], t: number, peak: number, dur: number, out: AudioNode) {
+    for (const n of notes) {
+      this.tone(midi(n), t, { type: 'triangle', peak, attack: dur * 0.35, decay: dur * 0.9, out, detune: rand(-6, 6) });
+      this.tone(midi(n), t, { type: 'sine', peak: peak * 0.7, attack: dur * 0.4, decay: dur * 0.85, out, detune: rand(-6, 6) });
+    }
+  }
+
+  /** 回傳此步驟長度（秒） */
   private scheduleTrack(track: Track, t: number, step: number): number {
-    if (track === 'zen') {
-      // D 大調五聲音階的和緩撥弦＋長音背景（原創）
-      const scale = [62, 64, 66, 69, 71, 74, 76, 78, 81];
-      if (step % 8 === 0) {
-        const roots = [50, 45, 47, 43];
-        const r = roots[(step / 8) % roots.length];
-        for (const n of [r, r + 7, r + 12]) this.tone(midi(n), t, { type: 'triangle', peak: 0.035, attack: 2.5, decay: 9, out: this.music });
+    if (track === 'zen' || track === 'garden') {
+      // 戶外冥想音樂（原創）：明亮的長音和弦＋稀疏的鐘片音，偶爾一串風鈴
+      const out = this.musicOutdoor;
+      const zen = track === 'zen';
+      const chords = zen
+        ? [
+            [62, 66, 69, 76],
+            [59, 66, 69, 74],
+            [55, 62, 67, 71],
+            [57, 64, 69, 73],
+          ]
+        : [
+            [60, 64, 67, 74],
+            [57, 64, 69, 72],
+            [53, 60, 65, 69],
+            [55, 62, 67, 71],
+          ];
+      const scale = zen ? [74, 76, 78, 81, 83, 86, 88] : [72, 74, 76, 79, 81, 84, 86];
+      if (step % 12 === 0) this.pad(chords[(step / 12) % 4], t, 0.012, 20, out);
+      if (Math.random() < (zen ? 0.45 : 0.55)) this.chime(midi(scale[Math.floor(Math.random() * scale.length)]), t, 0.03, out, this.reverbIn);
+      if (Math.random() < 0.06) {
+        for (let i = 0; i < 4; i++) this.chime(midi(scale[Math.floor(Math.random() * scale.length)] + 12), t + 0.12 * i + rand(0, 0.05), 0.012, out, this.reverbIn, 2.2);
       }
-      if (Math.random() < 0.7) {
-        const n = scale[Math.floor(Math.random() * scale.length)];
-        const p = this.tone(midi(n), t, { type: 'triangle', peak: 0.07, attack: 0.008, decay: 2.6, out: this.music });
-        p.g.connect(this.reverbIn);
-      }
-      return 1.4;
+      return 1.6;
     }
     if (track === 'piano') {
       // C – Am – F – G 分解和弦，約 66 BPM（原創）
@@ -549,9 +600,9 @@ class AudioEngine {
     // 偶爾響起的大鐘
     if (this.nextBigBell === 0 || this.nextBigBell > t + 120) this.nextBigBell = t + 10;
     if (t >= this.nextBigBell) {
-      if (scene === 'temple') this.bell(128, TEMPLE_BELL, 0.1, this.interiorZone, this.interiorVerbIn, t + 0.05);
-      else for (let i = 0; i < 3; i++) this.bell(392, CHURCH_BELL, 0.05, this.interiorZone, this.interiorVerbIn, t + 0.05 + i * 2.6);
-      this.nextBigBell = t + rand(45, 75);
+      if (scene === 'temple') this.bell(196, TEMPLE_BELL, 0.06, this.interiorZone, this.interiorVerbIn, t + 0.05);
+      else for (let i = 0; i < 3; i++) this.bell(523, CHURCH_BELL, 0.03, this.interiorZone, this.interiorVerbIn, t + 0.05 + i * 2.6);
+      this.nextBigBell = t + rand(60, 100);
     }
   }
 
@@ -615,26 +666,63 @@ class AudioEngine {
     mix.connect(env).connect(soft);
     soft.connect(this.interiorZone);
     soft.connect(this.interiorVerbIn);
-    // 佛堂：三位男聲齊誦（略為走音形成群誦感）；教堂：四部和聲
-    const detunes = scene === 'temple' ? [-9, 0, 7] : [-4, 3, -2, 5];
-    const oscs = detunes.map((d) => {
+    // 佛堂：三個中音聲部＋一個高八度的輕聲部（明亮、不低沉）；教堂：四部和聲
+    const voices: [number, number][] = scene === 'temple' ? [[0, -6], [0, 0], [0, 5], [12, 3]] : [[0, -4], [0, 3], [0, -2], [0, 5]];
+    const oscs = voices.map(([, d], i) => {
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
-      o.frequency.value = midi(45);
+      o.frequency.value = midi(50);
       o.detune.value = d;
+      if (scene === 'temple' && i === 3) {
+        // 高聲部較輕
+        const lg = ctx.createGain();
+        lg.gain.value = 0.45;
+        o.connect(lg);
+        lg.connect(f1);
+        lg.connect(f2);
+        lg.connect(f3);
+      }
       const vib = ctx.createOscillator();
       vib.frequency.value = rand(4.5, 5.5);
       const va = ctx.createGain();
       va.gain.value = scene === 'temple' ? 4 : 8;
       vib.connect(va).connect(o.detune);
       vib.start();
-      o.connect(f1);
-      o.connect(f2);
-      o.connect(f3);
+      if (!(scene === 'temple' && i === 3)) {
+        o.connect(f1);
+        o.connect(f2);
+        o.connect(f3);
+      }
       o.start();
       return o;
     });
-    this.voice = { oscs, f1, f2, f3, env, scene };
+    // 持續的柔和長音（空間感）：佛堂 D 大調、教堂 C 大調，音量緩慢呼吸起伏
+    const padGain = ctx.createGain();
+    padGain.gain.value = 0;
+    padGain.gain.setTargetAtTime(1, ctx.currentTime, 2);
+    const padLp = this.biquad('lowpass', 1800, 0.5);
+    padGain.connect(padLp);
+    padLp.connect(this.interiorZone);
+    padLp.connect(this.interiorVerbIn);
+    const extras: AudioScheduledSourceNode[] = [];
+    for (const n of scene === 'temple' ? [67, 74, 79, 83] : [67, 72, 76, 79]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = midi(n);
+      o.detune.value = rand(-5, 5);
+      const g = ctx.createGain();
+      g.gain.value = 0.012;
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = rand(0.05, 0.12);
+      const la = ctx.createGain();
+      la.gain.value = 0.008;
+      lfo.connect(la).connect(g.gain);
+      o.connect(g).connect(padGain);
+      o.start();
+      lfo.start();
+      extras.push(o, lfo);
+    }
+    this.voice = { oscs, offsets: voices.map(([o]) => o), f1, f2, f3, env, scene, extras, padGain };
   }
 
   private stopVoice() {
@@ -643,7 +731,9 @@ class AudioEngine {
     const t = this.ctx.currentTime;
     v.env.gain.cancelScheduledValues(t);
     v.env.gain.setTargetAtTime(0, t, 0.2);
+    v.padGain.gain.setTargetAtTime(0, t, 0.4);
     v.oscs.forEach((o) => o.stop(t + 1.5));
+    v.extras.forEach((o) => o.stop(t + 2.5));
     this.voice = null;
   }
 
@@ -656,45 +746,78 @@ class AudioEngine {
   }
 
   /**
-   * 佛堂：一句 8 個音節（每音節 0.5 秒，最後一音節拉長並降一個全音），四句後停頓並敲引磬；
-   * 每個音節伴隨輕柔的木魚。只有母音，沒有經文內容。
+   * 佛堂（冥想氛圍，原創）：一句 8 個音節，旋律在 G 大調五聲音階內輕輕起伏（不是單音低吟），
+   * 每音節 0.6 秒、句尾拉長；每句開頭敲一聲頌缽，四句後停頓並敲引磬；每個音節伴隨輕巧的木魚。
+   * 只有母音，沒有經文內容。
    */
   private templeStep(t: number, step: number, rec: boolean): number {
     const CYCLE = 36;
     const k = step % CYCLE;
-    if (k === 0 || k === 32) this.bell(1180, QING, 0.05, this.interiorZone, this.interiorVerbIn, t);
+    if (k === 32) this.bell(1175, QING, 0.04, this.interiorZone, this.interiorVerbIn, t);
     if (k >= 32) {
-      if (k === 32 && this.voice && !rec) this.voice.env.gain.setTargetAtTime(0, t, 0.08);
-      return 0.5;
+      if (k === 32 && this.voice && !rec) this.voice.env.gain.setTargetAtTime(0, t, 0.1);
+      return 0.75;
     }
     const pos = k % 8;
+    const phrase = Math.floor(k / 8);
+    if (pos === 0) this.bowl(t, phrase % 2 ? 587 : 392);
     const last = pos === 7;
-    const dur = last ? 1 : 0.5;
+    const dur = last ? 1.3 : 0.6;
     if (!rec && this.voice) {
-      const seq = ['a', 'm', 'o', 'u', 'a', 'e', 'o', 'm'];
+      const seq = ['a', 'o', 'a', 'e', 'o', 'a', 'u', 'm'];
       this.setVowel(seq[(k + Math.floor(step / CYCLE) * 3) % seq.length], t);
-      const pitch = midi(last ? 43 : 45);
-      this.voice.oscs.forEach((o) => o.frequency.setTargetAtTime(pitch, t, 0.05));
+      const MELODIES = [
+        [0, 2, 4, 4, 2, 0, 2, 0],
+        [4, 4, 7, 4, 2, 4, 2, 0],
+        [0, 2, 4, 7, 9, 7, 4, 2],
+        [2, 4, 2, 0, -3, 0, 2, 0],
+      ];
+      const pitch = 55 + MELODIES[phrase][pos];
+      this.voice.oscs.forEach((o, i) => o.frequency.setTargetAtTime(midi(pitch + this.voice!.offsets[i]), t, 0.06));
       const g = this.voice.env.gain;
-      g.setTargetAtTime(0.32, t, 0.03);
-      g.setTargetAtTime(0.18, t + dur * 0.55, 0.06);
-      if (last) g.setTargetAtTime(0.0, t + dur * 0.8, 0.08);
-      this.fishAt(t, this.interiorZone, 0.28);
+      g.setTargetAtTime(0.2, t, 0.05);
+      g.setTargetAtTime(0.12, t + dur * 0.6, 0.08);
+      if (last) g.setTargetAtTime(0.0, t + dur * 0.85, 0.1);
+      this.fishAt(t, this.interiorZone, pos % 2 ? 0.12 : 0.18);
     }
     return dur;
+  }
+
+  /** 頌缽：兩組微幅失諧的泛音產生緩慢的「嗡—」波動，尾音很長 */
+  private bowl(t: number, f: number) {
+    const ctx = this.ctx!;
+    for (const [ratio, amp, decay] of [
+      [1, 1, 10],
+      [2.76, 0.4, 6],
+      [5.4, 0.12, 3],
+    ] as const) {
+      for (const beat of [0, 1.3]) {
+        const p = this.tone(f * ratio + beat, t, { peak: 0.022 * amp, attack: 0.01, decay, out: this.interiorZone });
+        p.g.connect(this.interiorVerbIn);
+      }
+    }
+    // 敲擊瞬間的柔和木槌聲
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const bp = this.biquad('bandpass', f * 4, 2);
+    const g = ctx.createGain();
+    this.env(g, t, 0.03, 0.002, 0.05);
+    src.connect(bp).connect(g).connect(this.interiorZone);
+    src.start(t, Math.random());
+    src.stop(t + 0.08);
   }
 
   /** 教堂：四部和聲（原創和弦進行，母音「啊」「喔」交替）＋柔和管風琴；每四個和弦有一聲手鈴 */
   private churchStep(t: number, step: number, rec: boolean): number {
     const CHORDS = [
-      [48, 55, 64, 72],
-      [53, 57, 65, 72],
-      [45, 57, 64, 72],
-      [43, 55, 62, 71],
-      [48, 55, 64, 72],
-      [50, 57, 65, 69],
-      [43, 55, 62, 67],
-      [48, 55, 60, 64],
+      [55, 60, 64, 72],
+      [57, 60, 65, 72],
+      [57, 64, 69, 72],
+      [55, 62, 67, 71],
+      [55, 64, 67, 72],
+      [57, 62, 65, 69],
+      [55, 62, 67, 71],
+      [55, 60, 64, 72],
     ];
     const dur = 6;
     const c = CHORDS[step % CHORDS.length];
@@ -702,18 +825,20 @@ class AudioEngine {
       this.setVowel(step % 2 ? 'o' : 'a', t);
       this.voice.oscs.forEach((o, i) => o.frequency.setTargetAtTime(midi(c[i]), t, 0.18));
       const g = this.voice.env.gain;
-      g.setTargetAtTime(0.16, t, 0.5);
-      g.setTargetAtTime(0.06, t + dur - 0.9, 0.25);
+      g.setTargetAtTime(0.13, t, 0.5);
+      g.setTargetAtTime(0.05, t + dur - 0.9, 0.25);
+      // 輕柔的長笛音色管風琴（不使用低音）
       for (const n of c.slice(0, 3)) {
         for (const [h, a] of [
-          [1, 0.022],
-          [2, 0.01],
-          [4, 0.004],
+          [1, 0.014],
+          [2, 0.006],
         ] as const) {
-          const p = this.tone(midi(n - 12) * h, t, { peak: a, attack: 1.4, decay: dur + 0.5, out: this.interiorZone });
+          const p = this.tone(midi(n) * h, t, { peak: a, attack: 1.4, decay: dur + 0.5, out: this.interiorZone });
           p.g.connect(this.interiorVerbIn);
         }
       }
+      // 豎琴般的分解和弦
+      [0.8, 1.6, 2.4, 3.6].forEach((dt, i) => this.chime(midi(c[(i + 1) % 4] + 12), t + dt, 0.018, this.interiorZone, this.interiorVerbIn, 2.4));
     }
     if (step % 4 === 2) this.bell(784, CHURCH_BELL, 0.025, this.interiorZone, this.interiorVerbIn, t + 2);
     return dur;
@@ -731,8 +856,9 @@ class AudioEngine {
     const ctx = this.ctx!;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    o.frequency.setValueAtTime(820, t);
-    o.frequency.exponentialRampToValueAtTime(610, t + 0.04);
+    const bright = out === this.fish ? 1 : 1.15;
+    o.frequency.setValueAtTime(820 * bright, t);
+    o.frequency.exponentialRampToValueAtTime(610 * bright, t + 0.04);
     this.env(g, t, 0.6 * level, 0.002, 0.16);
     o.connect(g).connect(out);
     o.start(t);

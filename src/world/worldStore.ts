@@ -35,7 +35,7 @@ export interface WorldState {
   bellAt: number;
   meditation: Meditation | null;
   toast: Toast | null;
-  track: 'zen' | 'piano' | 'organ' | null;
+  track: 'zen' | 'garden' | 'piano' | 'organ' | null;
   /** 點擊地面移動的目標 */
   moveTarget: [number, number] | null;
 }
@@ -93,7 +93,8 @@ export function resetWorld(scene: SceneId) {
     fishAuto: false,
     meditation: null,
     toast: null,
-    track: null,
+    // 戶外冥想音樂預設開啟（設定面板可關閉）
+    track: load('ui', { outdoorMusic: true }).outdoorMusic === false ? null : scene === 'temple' ? 'zen' : 'garden',
     moveTarget: null,
     litLamps: [],
     litCandles: [],
